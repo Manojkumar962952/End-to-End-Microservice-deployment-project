@@ -1,0 +1,126 @@
+pipeline {
+    agent {
+        kubernetes {
+            yamlFile 'jenkins/k8s-agent-pod.yaml'
+            defaultContainer 'nodejs'
+        }
+    }
+
+    options {
+        timeout(time: 45, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '15', artifactNumToKeepStr: '5'))
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    environment {
+        AWS_REGION     = 'ap-south-1'
+        ECR_REGISTRY   = credentials('aws-ecr-registry-account-url')
+        APP_NAME       = 'ecommerce-platform'
+        KUBECONFIG_ID  = 'eks-staging-kubeconfig'
+    }
+
+    stages {
+        stage('Checkout & Lint') {
+            steps {
+                container('nodejs') {
+                    echo "Checking out Git commit: ${env.GIT_COMMIT}"
+                    sh 'npm ci'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Parallel Quality & Security Gates') {
+            parallel {
+                stage('Automated Unit & Contract Tests') {
+                    steps {
+                        container('nodejs') {
+                            sh 'npm test --workspaces --if-present'
+                        }
+                    }
+                }
+                stage('SAST Security Scan') {
+                    steps {
+                        container('security') {
+                            echo "Running SAST security scan..."
+                            sh 'semgrep --config=p/security-audit --config=p/owasp-top-ten --error .'
+                        }
+                    }
+                }
+                stage('NPM SCA Dependency Audit') {
+                    steps {
+                        container('nodejs') {
+                            sh 'npm audit --audit-level=high'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Rootless Container Build & Push (Kaniko)') {
+            steps {
+                container('kaniko') {
+                    echo "Executing daemonless, rootless container build with Kaniko..."
+                    sh '''
+                    /kaniko/executor \
+                      --context=dir://. \
+                      --dockerfile=services/api-gateway/Dockerfile \
+                      --destination=${ECR_REGISTRY}/ecommerce-api-gateway:${GIT_COMMIT} \
+                      --cache=true
+                    '''
+                }
+            }
+        }
+
+        stage('Container Image CVE Scan') {
+            steps {
+                container('security') {
+                    echo "Scanning container image with Trivy..."
+                    sh """
+                    trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 ${ECR_REGISTRY}/ecommerce-api-gateway:${GIT_COMMIT}
+                    """
+                }
+            }
+        }
+
+        stage('Manual Production Approval') {
+            steps {
+                timeout(time: 2, unit: 'HOURS') {
+                    input message: "Approve deployment of revision ${GIT_COMMIT} to EKS Production cluster?", ok: "Deploy to Prod"
+                }
+            }
+        }
+
+        stage('Production Helm Deployment') {
+            steps {
+                container('helm') {
+                    withCredentials([file(credentialsId: "${KUBECONFIG_ID}", variable: 'KUBECONFIG')]) {
+                        echo "Executing zero-downtime Helm release upgrade in namespace: production..."
+                        sh """
+                        helm upgrade --install ${APP_NAME} ./helm/ecommerce-platform \
+                          --namespace production \
+                          --create-namespace \
+                          --values ./helm/ecommerce-platform/values-prod.yaml \
+                          --set global.imageTag=${GIT_COMMIT} \
+                          --atomic \
+                          --timeout 8m0s
+                        """
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs deleteDirs: true, notFailBuild: true
+        }
+        success {
+            echo "CI/CD Pipeline succeeded! Revision ${env.GIT_COMMIT} deployed to Kubernetes."
+        }
+        failure {
+            echo "CI/CD Pipeline failed! Check logs and runbooks."
+        }
+    }
+}

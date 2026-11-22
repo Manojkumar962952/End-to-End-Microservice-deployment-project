@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: production
+
+resources:
+  - namespace.yaml
+  - configmaps.yaml
+  - secrets.yaml
+  - postgres.yaml
+  - redis.yaml
+  - rabbitmq.yaml
+  - api-gateway.yaml
+  - auth-service.yaml
+  - user-service.yaml
+  - product-service.yaml
+  - order-service.yaml
+  - payment-service.yaml
+  - inventory-service.yaml
+  - notification-service.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - network-policy.yaml

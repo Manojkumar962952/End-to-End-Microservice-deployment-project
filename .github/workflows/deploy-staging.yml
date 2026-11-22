@@ -1,0 +1,43 @@
+name: Continuous Delivery to Staging (AWS EKS & Helm)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER_NAME: ecommerce-eks-staging
+  ECR_REGISTRY: 123456789012.dkr.ecr.ap-south-1.amazonaws.com
+
+jobs:
+  deploy-to-staging:
+    name: Deploy Helm Release to Staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-staging-deployer
+          aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
+
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Helm Umbrella Chart
+        run: |
+          helm upgrade --install ecommerce-platform ./helm/ecommerce-platform \
+            --namespace staging \
+            --create-namespace \
+            --values ./helm/ecommerce-platform/values-staging.yaml \
+            --set global.imageTag=${{ github.sha }} \
+            --atomic \
+            --timeout 8m0s

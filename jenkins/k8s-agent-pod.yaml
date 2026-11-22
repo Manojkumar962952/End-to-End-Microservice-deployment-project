@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: ci-agent
+spec:
+  serviceAccountName: jenkins-agent-sa
+  securityContext:
+    runAsNonRoot: false
+  containers:
+    - name: nodejs
+      image: node:20-alpine
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 1000m
+          memory: 1024Mi
+
+    - name: kaniko
+      image: gcr.io/kaniko-project/executor:debug
+      command: ['cat']
+      tty: true
+      volumeMounts:
+        - name: kaniko-secret
+          mountPath: /kaniko/.docker
+      resources:
+        requests:
+          cpu: 1000m
+          memory: 1024Mi
+        limits:
+          cpu: 2000m
+          memory: 2048Mi
+
+    - name: security
+      image: aquasec/trivy:latest
+      command: ['cat']
+      tty: true
+      resources:
+        requests:
+          cpu: 250m
+          memory: 256Mi
+
+    - name: helm
+      image: alpine/helm:3.14.0
+      command: ['cat']
+      tty: true
+
+  volumes:
+    - name: kaniko-secret
+      secret:
+        secretName: ecr-docker-config
+        items:
+          - key: .dockerconfigjson
+            path: config.json

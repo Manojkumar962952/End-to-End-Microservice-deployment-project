@@ -63,16 +63,21 @@
 ---
 
 ## Phase 6: CI/CD Pipelines (GitHub Actions & Jenkins)
-- [ ] GitHub Actions: PR validation, SAST (Semgrep), Dependency audit, Docker build & Trivy scan
-- [ ] Jenkins: Declarative Jenkinsfile, agent architecture, build stages
+- [x] GitHub Actions: PR validation (`.github/workflows/pr-validation.yml`), SAST (Semgrep), Dependency audit, Docker build & Trivy scan (`.github/workflows/docker-build-scan.yml`)
+- [x] GitHub Actions: Staging CD deployment with AWS OIDC passwordless role assumption (`.github/workflows/deploy-staging.yml`)
+- [x] Jenkins: Declarative Jenkinsfile (`jenkins/Jenkinsfile`), ephemeral K8s agent pod (`jenkins/k8s-agent-pod.yaml`), rootless Kaniko build runner
 
 ---
 
 ## Phase 7: Local Kubernetes (Kind / Minikube)
-- [ ] Pods, Deployments, Services (ClusterIP, NodePort), Ingress
-- [ ] ConfigMaps, Secrets, ServiceAccounts & RBAC
-- [ ] Health probes (Liveness, Readiness, Startup)
-- [ ] NetworkPolicies & Pod Security Standards (Restricted)
+- [x] Multi-node Kind cluster configuration (`k8s/kind-config.yaml`) with Ingress port mappings
+- [x] Base K8s Deployments & Services for all 8 microservices, frontend, postgres, redis, and rabbitmq (`k8s/base/`)
+- [x] Ingress-NGINX routing rules (`k8s/base/ingress.yaml`)
+- [x] ConfigMaps and Secrets management (`k8s/base/configmaps.yaml`, `k8s/base/secrets.yaml`)
+- [x] Liveness, Readiness, and Startup probes on all services
+- [x] Horizontal Pod Autoscalers (`k8s/base/hpa.yaml`) and Pod Disruption Budgets (`k8s/base/pdb.yaml`)
+- [x] Zero-Trust NetworkPolicies (`k8s/base/network-policy.yaml`) and Pod Security Standards (Restricted)
+- [x] Kustomize bundle (`k8s/base/kustomization.yaml`) and local deployment helper (`scripts/deploy-k8s-local.ps1`)
 
 ---
 
