@@ -2,11 +2,10 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
-import { UserRole, AuthTokens, UserTokenPayload } from '@enterprise/contracts';
+import { AuthTokens, UserTokenPayload } from '@enterprise/contracts';
 
 export class TokenService {
   // Memory-hard key derivation function (scrypt via Node native crypto):
-  // Resistant to GPU and dictionary attacks, zero external native compilation dependencies
   public static async hashPassword(password: string): Promise<string> {
     return new Promise((resolve, reject) => {
       const salt = crypto.randomBytes(16).toString('hex');
@@ -35,12 +34,12 @@ export class TokenService {
 
   public static generateTokens(payload: UserTokenPayload, familyId: string = uuidv4()): { tokens: AuthTokens; familyId: string; refreshTokenHash: string; expiresAt: Date } {
     const accessToken = jwt.sign(payload, config.jwt.accessSecret, {
-      expiresIn: config.jwt.accessExpiresIn
+      expiresIn: 900 // 15 mins in seconds
     });
 
     const rawRefreshToken = uuidv4() + '.' + uuidv4();
     const refreshToken = jwt.sign({ raw: rawRefreshToken, familyId, userId: payload.userId }, config.jwt.refreshSecret, {
-      expiresIn: `${config.jwt.refreshExpiresInSeconds}s`
+      expiresIn: config.jwt.refreshExpiresInSeconds
     });
 
     const expiresAt = new Date(Date.now() + config.jwt.refreshExpiresInSeconds * 1000);

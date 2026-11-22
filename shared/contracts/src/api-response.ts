@@ -10,6 +10,7 @@ export interface ApiResponse<T> {
       total: number;
       totalPages: number;
     };
+    [key: string]: unknown;
   };
 }
 
@@ -23,5 +24,6 @@ export interface ApiErrorResponse {
   meta: {
     correlationId?: string;
     timestamp: string;
+    [key: string]: unknown;
   };
 }
