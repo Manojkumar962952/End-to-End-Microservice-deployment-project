@@ -91,10 +91,13 @@
 ---
 
 ## Phase 9: AWS Infrastructure as Code (Terraform in ap-south-1)
-- [ ] VPC, Subnets (Public, Private App, Private DB), NAT Gateway
-- [ ] Amazon EKS cluster & managed node groups
-- [ ] Amazon RDS PostgreSQL & ElastiCache Redis
-- [ ] ECR, ALB Ingress Controller, Route 53 & ACM
+- [x] Multi-AZ VPC module (`terraform/modules/vpc/`) with 6 subnets, 2 NAT Gateways & S3 Gateway Endpoint
+- [x] Least-Privilege Security Groups (`terraform/modules/security-groups/`) for ALB, EKS, RDS, and ElastiCache
+- [x] Amazon ECR repositories (`terraform/modules/ecr/`) with image tag immutability & lifecycle rules
+- [x] Amazon EKS cluster module (`terraform/modules/eks/`) with IRSA OIDC & Spot/On-Demand managed node groups
+- [x] Amazon RDS PostgreSQL Multi-AZ module (`terraform/modules/rds/`) with automated snapshots
+- [x] Amazon ElastiCache Redis replication group module (`terraform/modules/elasticache/`)
+- [x] Production environment definition (`terraform/environments/prod/`) formatted with canonical HCL (`terraform fmt`)
 
 ---
 
