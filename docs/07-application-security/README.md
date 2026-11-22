@@ -1,4 +1,4 @@
-# Enterprise Application Security Guide & OWASP Top 10 Hardening
+# Chapter 07: Application Security & OWASP Top 10 Hardening
 
 ```
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+
@@ -14,54 +14,52 @@
 
 ---
 
-## 1. What is Application Security?
-Application security encompasses the practices, architectural controls, and code-level defenses designed to protect software applications from threats, data leakage, unauthorized manipulation, and service degradation across the software development lifecycle (SDLC).
+## 1. What is It?
+Application Security is the discipline of designing, implementing, and verifying security defenses across the entire application stack to protect user data, software logic, and computational resources from unauthorized access, modification, or denial-of-service threats throughout the Software Development Lifecycle (SDLC).
 
 ---
 
-## 2. Why Do Companies Prioritize It?
-- **Financial & Regulatory Penalties**: Data breaches violate GDPR, HIPAA, and PCI-DSS, resulting in multi-million dollar regulatory fines.
-- **Brand Reputation**: Customer loss following account credential breaches or credit card theft can destroy business valuation.
-- **Supply Chain Threats**: Vulnerable third-party dependencies (`node_modules`) are actively targeted by malicious threat actors.
+## 2. Why Do Companies Use It?
+- **Financial & Regulatory Penalties**: Data breaches violate GDPR, HIPAA, and PCI-DSS, triggering fines reaching millions of dollars.
+- **Customer Trust & Brand Value**: Account takeovers, leaked credentials, or fraudulent credit card charges destroy brand valuation.
+- **Supply Chain Protection**: Protects against malicious open-source dependency injection and zero-day vulnerabilities in container base images.
 
 ---
 
-## 3. What Problems Does It Solve? (OWASP Top 10 Mitigations)
+## 3. What Problem Does It Solve? (OWASP Top 10 Mitigations)
 
-| OWASP Vulnerability | Real-World Attack Scenario | How We Mitigate It in This Codebase |
+| OWASP Vulnerability | Attack Vector | Project Implementation Defense |
 | :--- | :--- | :--- |
-| **A01: Broken Access Control** | An authenticated user modifies URL `/orders/999` to view another customer's order. | In `services/order-service`, SQL queries enforce `WHERE id = $1 AND customer_id = $2`. Users can only access their own data. |
-| **A02: Cryptographic Failures** | Storing plaintext passwords or using outdated MD5/SHA1 algorithms cracked by rainbow tables. | Passwords hashed using **memory-hard key derivation (`scrypt`/`Argon2id`)** with unique random salts and timing-safe equality comparison. |
-| **A03: Injection (SQLi / XSS)** | Attacker submits `admin' OR 1=1; --` in email input to bypass login. | Strict **parameterized queries (`$1, $2`)** via `pg` library. Direct string concatenation in SQL queries is prohibited. |
-| **A04: Insecure Design** | Flash sale bot drains inventory in 100 milliseconds or replays credit card charges. | **Redis Token-Bucket Rate Limiting** on Gateway + **Mandatory Idempotency Keys** on checkout endpoints. |
-| **A05: Security Misconfiguration** | Running Docker containers as `root` or displaying verbose stack traces to users. | All containers run as **`USER node`**. Errors are sanitized into generic `ApiErrorResponse` envelopes. |
-| **A07: Identification & Auth Failures** | Stolen long-lived JWTs give permanent access to an attacker. | **Short-lived JWT Access Tokens (15 min)** paired with **Refresh Token Rotation (RTR)**. Stolen token replay revokes the entire family. |
+| **A01: Broken Access Control** | Modifying URL `/orders/:id` to read another user's invoice. | Database queries strictly enforce `WHERE id = $1 AND customer_id = $2`. |
+| **A02: Cryptographic Failures** | Storing plaintext passwords cracked via rainbow tables. | Passwords hashed using **memory-hard key derivation (`crypto.scrypt`)** with unique cryptographically random salts. |
+| **A03: Injection (SQLi / XSS)** | Attacker inputs `admin' OR 1=1; --` in email field. | **Parameterized queries (`$1, $2`)** via `pg` library; direct string concatenation is forbidden. |
+| **A04: Insecure Design** | Flash-sale bot drains inventory in 100 milliseconds. | **Redis Token-Bucket Rate Limiter** on Gateway + **Idempotency Keys** on checkout. |
+| **A05: Security Misconfiguration** | Containers running as `root` or verbose stack traces leaked. | Non-root **`USER node`** runtime execution and standardized sanitized error envelopes. |
+| **A07: Identification & Auth Failures** | Long-lived stolen JWT allows indefinite account takeover. | **Short-lived JWT Access Tokens (15 min)** with **Refresh Token Rotation (RTR)**. Token theft revokes the entire family. |
 
 ---
 
 ## 4. How Does It Work Internally?
-
-### Refresh Token Rotation (RTR) & Replay Attack Defense
-In our Authentication Service ([`services/auth-service/src/services/auth.service.ts`](file:///c:/Users/Admin/Desktop/coporate-project/services/auth-service/src/services/auth.service.ts)):
-1. Customer logs in $\rightarrow$ receives a short-lived Access Token and a long-lived Refresh Token bound to a `family_id`.
-2. When refreshing, the client sends the refresh token.
-3. The database checks if the token has already been revoked:
-   - **Happy Path**: Token is valid $\rightarrow$ mark current token as `is_revoked = true` $\rightarrow$ issue a brand new refresh token in the same family.
-   - **Attack Detected**: If an attacker attempts to use an already revoked refresh token (token reuse), the system detects token theft and immediately **revokes all tokens in that `family_id`**, logging out the legitimate user and terminating the stolen session.
+1. **Refresh Token Rotation (RTR) & Replay Attack Defense**:
+   - Customer logs in $\rightarrow$ receives a 15-minute Access Token and a 7-day Refresh Token bound to a `family_id`.
+   - When renewing, client sends the Refresh Token.
+   - If the token is valid $\rightarrow$ it is invalidated (`is_revoked = true`) and a brand new token is issued in that family.
+   - **Collision Detection**: If an attacker attempts to use an already revoked token, the system detects a token replay attack and immediately **revokes all tokens in that `family_id`**, logging out the legitimate customer and terminating the stolen session.
+2. **Parameterized Database Execution**:
+   - PostgreSQL separates SQL query compilation from user data. `$1` is treated purely as a data literal, making it mathematically impossible for input strings to alter query syntax.
 
 ---
 
 ## 5. Where Does It Fit in Our Architecture?
-- **API Gateway**: Edge rate limiting, CORS whitelisting, HTTP security headers (`Helmet`), JWT verification.
-- **Auth Service**: Password hashing, refresh token rotation.
-- **Microservices**: Parameterized SQL queries, role-based access checks (`x-user-role`).
-- **Dockerfiles**: `USER node` non-root containers.
+- **API Gateway Edge**: Helmet security headers, CORS whitelisting, Redis token-bucket rate limiting.
+- **Auth Service**: scrypt password derivation, Refresh Token Rotation.
+- **Microservices**: Parameterized SQL, role checks (`x-user-role`), IDOR authorization.
+- **Dockerfiles**: Minimal Alpine Linux bases and unprivileged `USER node` (UID 1000).
 
 ---
 
 ## 6. How We Implemented It in This Project
-
-### Input Validation with Zod
+### Zod Schema Validation & Parameterized Queries:
 ```typescript
 // shared/contracts/src/dtos.ts
 export const RegisterRequestSchema = z.object({
@@ -70,56 +68,100 @@ export const RegisterRequestSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1)
 });
+
+// services/auth-service/src/services/auth.service.ts
+const result = await pool.query(
+  'SELECT id, password_hash, salt, role FROM users_auth WHERE email = $1',
+  [email.toLowerCase()]
+);
 ```
 
-### Parameterized SQL Query Prevention
+---
+
+## 7. Configuration Examples
+### Helmet HTTP Security Headers in Express:
 ```typescript
-// Correct: Parameterized Query (Zero SQL Injection)
-await pool.query('SELECT * FROM users_auth WHERE email = $1', [email.toLowerCase()]);
+// services/api-gateway/src/index.ts
+import helmet from 'helmet';
 
-// Prohibited Vulnerable Pattern:
-// await pool.query(`SELECT * FROM users_auth WHERE email = '${email}'`);
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  frameguard: { action: 'deny' },
+  noSniff: true,
+  xssFilter: true
+}));
 ```
 
 ---
 
-## 7. Developer Security Checklist
+## 8. Commands
+```powershell
+# Run automated security test suite covering SQLi, rate limits, and JWT tampering
+powershell -ExecutionPolicy Bypass -File .\scripts\security-test.ps1
 
-Share this checklist with software engineers before approving pull requests:
+# Audit npm dependencies for known high/critical CVEs
+npm audit --workspaces --audit-level=high
 
-- [ ] **Input Validation**: Are all incoming request parameters validated against a strict Zod/Joi schema?
-- [ ] **No SQL Concatenation**: Are all database interactions strictly using parameterized queries (`$1, $2`)?
-- [ ] **Authentication Guard**: Is every non-public route protected by `requireAuth`?
-- [ ] **Authorization (IDOR)**: Does the database query check that `record.customer_id === req.user.userId`?
-- [ ] **Data Masking**: Are passwords, secret keys, and JWT secrets scrubbed from logs?
-- [ ] **Non-Root Docker**: Does the Dockerfile specify an unprivileged runtime user (`USER node`)?
-- [ ] **No Committed Secrets**: Are `.env` files and credentials excluded via `.gitignore`?
+# Run Semgrep SAST across application codebase
+npx semgrep --config=auto .
+```
 
 ---
 
-## 8. Verification & Security Testing Commands
-
-### Verify Parameterized SQL Injection Immunity
-Attempt submitting an SQL injection payload to login:
+## 9. Verification
 ```powershell
+# 1. Verify container non-root execution (Must output UID 1000 / node)
+docker compose exec auth-service id
+
+# 2. Verify SQL injection immunity
 Invoke-RestMethod -Uri "http://localhost:8000/api/v1/auth/login" -Method Post `
   -Body '{"email":"admin@example.com'' OR ''1''=''1","password":"test"}' `
   -ContentType "application/json" -ErrorAction SilentlyContinue
-```
-*Expected Result*: Returns `HTTP 401 INVALID_CREDENTIALS` or `HTTP 400 VALIDATION_ERROR`. The database treats the injection string literally, preventing unauthorized access.
 
-### Verify Container Non-Root User
-```powershell
-docker compose exec auth-service whoami
+# 3. Verify security response headers
+curl -I http://localhost:8000/health/live
 ```
-*Expected Result*: `node` (UID 1000, not `root`).
 
 ---
 
-## 9. Senior Interview Questions & Answers
+## 10. Common Mistakes
+1. **String Interpolation in SQL Queries**: Using string template literals (``SELECT * FROM users WHERE email = '${email}'``) instead of parameterized arrays (`$1, [email]`).
+2. **Storing Plaintext or MD5 Passwords**: Using fast general-purpose hashing functions (MD5, SHA-256) instead of memory-hard key derivation functions (`scrypt`, `Argon2id`, `bcrypt`).
+3. **Trusting Client Headers**: Believing user claims like `req.headers['x-user-id']` from incoming public internet requests without gateway verification and header scrubbing.
 
-### Q1: What is Refresh Token Rotation and why is it superior to long-lived JWTs?
-> **Answer**: JWTs are stateless and cannot be revoked before they expire without querying a database on every request. If an access token has a 30-day lifetime and is stolen, the attacker has a 30-day window. Refresh Token Rotation limits access token lifetime to 15 minutes. Refresh tokens are one-time-use: whenever a refresh token is used, it is invalidated and replaced. If a stolen token is reused, the server detects the collision and revokes the entire token family, neutralizing the attacker.
+---
 
-### Q2: What is an IDOR vulnerability, and how do you prevent it in microservices?
-> **Answer**: Insecure Direct Object Reference (IDOR) occurs when an application exposes a reference to an internal object (e.g. `GET /orders/12345`) without verifying that the requesting user owns that object. To prevent it, the service must never fetch by object ID alone; it must enforce ownership in the query: `SELECT * FROM orders WHERE id = $1 AND customer_id = $2`.
+## 11. Troubleshooting
+- **Legitimate Users Blocked by Rate Limiter**: Redis rate limit threshold set too low for high-activity pages. Increase bucket capacity or allow higher thresholds for authenticated session tokens.
+- **CORS Errors in Browser**: Browser blocks API requests with `Access to XMLHttpRequest has been blocked by CORS policy`. Verify API Gateway CORS middleware allows the frontend origin (`http://localhost:3000`).
+
+---
+
+## 12. Security Best Practices
+- **Never Commit Secrets to Git**: Enforce Gitleaks pre-commit hooks to block keys from entering version control.
+- **Least Privilege Database Credentials**: Microservices must never share database accounts or connect with superuser privileges.
+- **Automated Container Scanning in CI**: Block deployments with Trivy if high/critical container CVEs are detected.
+
+---
+
+## 13. Real-World Use Cases
+- **Equifax Data Breach**: Unpatched Apache Struts vulnerability (CVE-2017-5638) allowed remote attackers to execute commands as root. Running containers as non-root and continuous SCA dependency scanning would have neutralized the vector.
+
+---
+
+## 14. Senior DevOps Interview Questions & Answers
+### Q1: What is Refresh Token Rotation (RTR) and how does it prevent token replay attacks?
+**Answer**: In stateless JWT architectures, an access token cannot be easily revoked before its expiration. Refresh Token Rotation pairs a short-lived access token (15m) with a single-use refresh token. Each time the refresh token is presented, the server revokes it and issues a new pair. If an attacker intercepts a refresh token and attempts to use it after the legitimate client already refreshed, the server detects that an already-revoked token is being reused, flags a security breach, and immediately revokes all tokens in that `family_id`, terminating the compromised session.
+
+### Q2: Why is `crypto.scrypt` or `Argon2id` superior to SHA-256 for password hashing?
+**Answer**: SHA-256 is designed to be computationally fast and parallelizable, allowing modern GPUs and ASIC miners to compute billions of hashes per second, making brute-force rainbow table attacks trivial. `scrypt` and `Argon2id` are **memory-hard key derivation functions**. They require significant RAM (e.g. 64MB per hash) and execution time, rendering parallel ASIC and GPU brute-force attacks economically and physically unfeasible.
+
+### Q3: What is Insecure Direct Object Reference (IDOR) and how do you prevent it in microservices?
+**Answer**: IDOR occurs when an application exposes a direct identifier to an internal database record (e.g., `GET /api/v1/orders/12345`) without validating that the authenticated user owns that record. An attacker simply increments the integer or UUID to view other customers' private data. It is prevented by enforcing ownership checks in database queries: `SELECT * FROM orders WHERE id = $1 AND customer_id = $2`, ensuring users can access only their own records.
