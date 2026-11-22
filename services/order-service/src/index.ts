@@ -177,16 +177,53 @@ app.get('/orders', async (req, res, next) => {
 
   try {
     const ordersRes = await pool.query(
-      'SELECT * FROM orders WHERE customer_id = $1 ORDER BY created_at DESC',
+      `SELECT o.*, 
+        COALESCE(json_agg(json_build_object('productId', oi.product_id, 'productName', oi.product_name, 'quantity', oi.quantity, 'unitPriceCents', oi.unit_price_cents)) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+       FROM orders o
+       LEFT JOIN order_items oi ON o.id = oi.order_id
+       WHERE o.customer_id = $1
+       GROUP BY o.id
+       ORDER BY o.created_at DESC`,
       [customerId]
     );
 
-    const response: ApiResponse<OrderDto[]> = {
+    const response: ApiResponse<any[]> = {
       success: true,
       data: ordersRes.rows,
       meta: { correlationId: req.correlationId, timestamp: new Date().toISOString() }
     };
     res.json(response);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /orders/:id (Specific order details)
+app.get('/orders/:id', async (req, res, next) => {
+  const customerId = req.headers['x-user-id'] as string;
+  const { id } = req.params;
+  if (!customerId) throw new AppError('Unauthorized', 401);
+
+  try {
+    const ordersRes = await pool.query(
+      `SELECT o.*, 
+        COALESCE(json_agg(json_build_object('productId', oi.product_id, 'productName', oi.product_name, 'quantity', oi.quantity, 'unitPriceCents', oi.unit_price_cents)) FILTER (WHERE oi.id IS NOT NULL), '[]') as items
+       FROM orders o
+       LEFT JOIN order_items oi ON o.id = oi.order_id
+       WHERE o.id = $1 AND o.customer_id = $2
+       GROUP BY o.id`,
+      [id, customerId]
+    );
+
+    if (ordersRes.rows.length === 0) {
+      throw new AppError('Order not found', 404, 'ORDER_NOT_FOUND');
+    }
+
+    res.json({
+      success: true,
+      data: ordersRes.rows[0],
+      meta: { correlationId: req.correlationId, timestamp: new Date().toISOString() }
+    });
   } catch (err) {
     next(err);
   }

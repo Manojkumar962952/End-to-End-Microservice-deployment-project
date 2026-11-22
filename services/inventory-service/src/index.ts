@@ -188,6 +188,16 @@ app.get('/health/ready', async (_req, res) => {
   }
 });
 
+// GET all inventory stock levels
+app.get('/inventory/stock', async (req, res, next) => {
+  try {
+    const result = await pool.query('SELECT * FROM inventory ORDER BY product_id');
+    res.json({ success: true, data: result.rows, meta: { correlationId: req.correlationId } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Seed or update stock
 app.post('/inventory/stock', async (req, res, next) => {
   try {

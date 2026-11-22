@@ -23,47 +23,94 @@ interface OrderItem {
   currency: string;
   idempotency_key: string;
   created_at: string;
+  items?: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unitPriceCents: number;
+  }>;
+}
+
+interface NotificationLog {
+  id: string;
+  recipient_email: string;
+  notification_type: string;
+  correlation_id: string;
+  payload: any;
+  status: string;
+  sent_at: string;
+}
+
+interface UserProfile {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  shippingAddress: {
+    street: string;
+    city: string;
+    country: string;
+    zip: string;
+  };
 }
 
 const API_URL = 'http://localhost:8000/api/v1';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'orders' | 'architecture'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'orders' | 'profile' | 'notifications' | 'techmap'>('catalog');
   const [products, setProducts] = useState<Product[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Cart state
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [shippingAddress, setShippingAddress] = useState({ street: '100 Innovation Way', city: 'Mumbai', country: 'India', zip: '400001' });
 
   // Auth state
   const [token, setToken] = useState<string | null>(localStorage.getItem('jwt_token'));
-  const [currentUser, setCurrentUser] = useState<{ email: string; userId: string; role: string } | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authFirstName, setAuthFirstName] = useState('');
   const [authLastName, setAuthLastName] = useState('');
+  const [currentUser, setCurrentUser] = useState<{ email: string; userId: string; role: string } | null>(null);
+
+  // Profile state
+  const [profile, setProfile] = useState<UserProfile>({
+    firstName: 'DevOps',
+    lastName: 'Engineer',
+    phone: '+91 9876543210',
+    shippingAddress: { street: '100 Innovation Way', city: 'Mumbai', country: 'India', zip: '400001' }
+  });
 
   // Orders state
   const [orders, setOrders] = useState<OrderItem[]>([]);
-  const [latestOrder, setLatestOrder] = useState<OrderItem | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderItem | null>(null);
   const [sagaStep, setSagaStep] = useState<number>(0);
+  const [latestSagaOrder, setLatestSagaOrder] = useState<any>(null);
 
-  // Toast / Status state
+  // Notifications state
+  const [notifications, setNotifications] = useState<NotificationLog[]>([]);
+
+  // Health & Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [gatewayStatus, setGatewayStatus] = useState<'connected' | 'offline' | 'checking'>('checking');
+  const [gatewayStatus, setGatewayStatus] = useState<'connected' | 'offline'>('connected');
 
   useEffect(() => {
-    checkGatewayHealth();
     fetchProducts();
+    fetchNotifications();
     if (token) {
       decodeToken(token);
       fetchOrders(token);
+      fetchProfile(token);
     }
   }, []);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4500);
+    setTimeout(() => setToast(null), 4000);
   };
 
   const decodeToken = (jwtString: string) => {
@@ -71,25 +118,12 @@ export default function App() {
       const payloadBase64 = jwtString.split('.')[1];
       const decodedJson = JSON.parse(atob(payloadBase64));
       setCurrentUser({
-        email: decodedJson.email || 'customer@enterprise.example',
+        email: decodedJson.email || 'engineer@enterprise.example',
         userId: decodedJson.userId || '',
         role: decodedJson.role || 'CUSTOMER'
       });
     } catch {
-      // Fallback
-    }
-  };
-
-  const checkGatewayHealth = async () => {
-    try {
-      const res = await fetch('http://localhost:8000/health/live');
-      if (res.ok) {
-        setGatewayStatus('connected');
-      } else {
-        setGatewayStatus('offline');
-      }
-    } catch {
-      setGatewayStatus('offline');
+      // Ignore
     }
   };
 
@@ -100,14 +134,14 @@ export default function App() {
       if (json.success && json.data.length > 0) {
         setProducts(json.data);
       } else {
-        // Fallback demo catalog if database table was not seeded yet
+        // Fallback default enterprise catalog items
         setProducts([
           {
             id: 'a0000000-0000-0000-0000-000000000001',
             name: 'Enterprise Cloud Architecture Masterclass',
             slug: 'cloud-masterclass',
             priceCents: 4999,
-            description: 'Hands-on production AWS, Kubernetes, Terraform & Microservices',
+            description: 'Hands-on production AWS Mumbai, EKS, Terraform, and Multi-Service design.',
             categoryName: 'Cloud & DevOps',
             isActive: true
           },
@@ -116,7 +150,7 @@ export default function App() {
             name: 'Kubernetes Security & Hardening Guide',
             slug: 'k8s-security',
             priceCents: 2999,
-            description: 'Production pod security standards, RBAC, NetworkPolicies and CIS benchmarks',
+            description: 'Production Pod Security Standards, RBAC, NetworkPolicies, and CIS benchmarks.',
             categoryName: 'Security',
             isActive: true
           },
@@ -125,14 +159,15 @@ export default function App() {
             name: 'Site Reliability Engineering Handbook',
             slug: 'sre-handbook',
             priceCents: 3499,
-            description: '4 Golden Signals, Prometheus metrics, distributed tracing and incident drills',
+            description: 'The 4 Golden Signals, Prometheus metrics, distributed tracing, and real incident drills.',
             categoryName: 'SRE & Monitoring',
             isActive: true
           }
         ]);
       }
     } catch {
-      showToast('Could not reach API Gateway on port 8000', 'error');
+      setGatewayStatus('offline');
+      showToast('API Gateway (port 8000) is unreachable.', 'error');
     }
   };
 
@@ -150,6 +185,66 @@ export default function App() {
     }
   };
 
+  const fetchProfile = async (authToken: string) => {
+    try {
+      const res = await fetch(`${API_URL}/users/profile`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setProfile({
+          firstName: json.data.first_name || 'DevOps',
+          lastName: json.data.last_name || 'Engineer',
+          phone: json.data.phone || '+91 9876543210',
+          shippingAddress: json.data.shipping_address || shippingAddress
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${API_URL}/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          phone: profile.phone,
+          shippingAddress: profile.shippingAddress
+        })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showToast('Profile updated successfully in User Service!', 'success');
+      } else {
+        showToast(json.error?.message || 'Update failed', 'error');
+      }
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch(`${API_URL}/notifications`);
+      const json = await res.json();
+      if (json.success) {
+        setNotifications(json.data);
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -160,12 +255,12 @@ export default function App() {
           email: authEmail,
           password: authPassword,
           firstName: authFirstName || 'DevOps',
-          lastName: authLastName || 'Engineer'
+          lastName: authLastName || 'Learner'
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Account registered! Please sign in with your credentials.', 'success');
+        showToast('Registered! Please sign in with your password.', 'success');
         setAuthMode('login');
       } else {
         showToast(data.error?.message || 'Registration failed', 'error');
@@ -190,10 +285,11 @@ export default function App() {
         localStorage.setItem('jwt_token', accessToken);
         decodeToken(accessToken);
         fetchOrders(accessToken);
+        fetchProfile(accessToken);
         setIsAuthModalOpen(false);
-        showToast('Welcome back! Authenticated with JWT session.', 'success');
+        showToast('Welcome back! JWT session established.', 'success');
       } else {
-        showToast(data.error?.message || 'Invalid email or password', 'error');
+        showToast(data.error?.message || 'Login failed', 'error');
       }
     } catch (err: any) {
       showToast(err.message, 'error');
@@ -269,16 +365,17 @@ export default function App() {
 
       const json = await res.json();
       if (json.success) {
-        setLatestOrder(json.data);
+        setLatestSagaOrder(json.data);
         setCart([]);
-        showToast('Order received! Choreographed Saga triggered on RabbitMQ.', 'success');
+        showToast('Order submitted! Choreographed Saga executing on RabbitMQ.', 'success');
 
-        // Simulate real-time progress steps as RabbitMQ consumers process
+        // Progressively simulate Saga pipeline states
         setTimeout(() => setSagaStep(2), 700);
         setTimeout(() => setSagaStep(3), 1500);
         setTimeout(() => {
           setSagaStep(4);
           fetchOrders(token);
+          fetchNotifications();
         }, 2200);
       } else {
         setSagaStep(0);
@@ -286,13 +383,19 @@ export default function App() {
       }
     } catch (err: any) {
       setSagaStep(0);
-      showToast(`Network error during checkout: ${err.message}`, 'error');
+      showToast(`Network error: ${err.message}`, 'error');
     }
   };
 
+  const filteredProducts = products.filter((p) => {
+    const matchesCategory = selectedCategory === 'ALL' || p.categoryName === selectedCategory;
+    const matchesQuery = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesQuery;
+  });
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      {/* Toast Notification */}
+      {/* Toast Alert */}
       {toast && (
         <div
           style={{
@@ -307,11 +410,9 @@ export default function App() {
             borderRadius: '10px',
             color: '#fff',
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
             boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
-            backgroundColor:
-              toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#dc2626' : '#2563eb',
-            animation: 'slideIn 0.3s ease-out'
+            backgroundColor: toast.type === 'success' ? '#059669' : toast.type === 'error' ? '#dc2626' : '#2563eb'
           }}
         >
           <span>{toast.message}</span>
@@ -324,7 +425,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Enterprise Top Navbar */}
+      {/* Enterprise Header */}
       <header
         style={{
           background: '#ffffff',
@@ -332,7 +433,7 @@ export default function App() {
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
         }}
       >
         <div
@@ -347,35 +448,34 @@ export default function App() {
             gap: '16px'
           }}
         >
-          {/* Logo & Branding */}
+          {/* Logo & Platform Name */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '40px',
-                height: '40px',
+                width: '42px',
+                height: '42px',
                 borderRadius: '10px',
-                background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                background: 'linear-gradient(135deg, #2563eb, #1e40af)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#fff',
-                fontWeight: 800,
-                fontSize: '20px'
+                fontSize: '22px'
               }}
             >
               ☁️
             </div>
             <div>
-              <div style={{ fontWeight: 800, fontSize: '18px', color: '#0f172a', letterSpacing: '-0.5px' }}>
-                Enterprise Platform
+              <div style={{ fontWeight: 800, fontSize: '19px', color: '#0f172a', letterSpacing: '-0.5px' }}>
+                CloudStore Enterprise
               </div>
               <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>
-                Microservices • DevOps • Kubernetes • AWS
+                Production-Grade Microservices & DevOps Platform
               </div>
             </div>
           </div>
 
-          {/* Infrastructure Health Telemetry Pills */}
+          {/* Infrastructure Health Telemetry Indicators */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <div
               style={{
@@ -399,47 +499,20 @@ export default function App() {
                   backgroundColor: gatewayStatus === 'connected' ? '#10b981' : '#ef4444'
                 }}
               />
-              Gateway :8000 {gatewayStatus === 'connected' ? 'LIVE' : 'DOWN'}
+              Gateway :8000 LIVE
             </div>
-            <div
-              style={{
-                background: '#f1f5f9',
-                color: '#475569',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-            >
-              🐘 Postgres 16
-            </div>
-            <div
-              style={{
-                background: '#f1f5f9',
-                color: '#475569',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-            >
-              ⚡ Redis 7
-            </div>
-            <div
-              style={{
-                background: '#f1f5f9',
-                color: '#475569',
-                padding: '4px 10px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: 600
-              }}
-            >
-              🐇 RabbitMQ 3
-            </div>
+            <span style={{ fontSize: '12px', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontWeight: 600, color: '#475569' }}>
+              🐘 Postgres 16 (7 DBs)
+            </span>
+            <span style={{ fontSize: '12px', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontWeight: 600, color: '#475569' }}>
+              ⚡ Redis 7 Cache
+            </span>
+            <span style={{ fontSize: '12px', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px', fontWeight: 600, color: '#475569' }}>
+              🐇 RabbitMQ 3 Broker
+            </span>
           </div>
 
-          {/* User & Cart Controls */}
+          {/* User Profile & Cart Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {currentUser ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -482,7 +555,7 @@ export default function App() {
               </button>
             )}
 
-            {/* Shopping Cart Pill Button */}
+            {/* Cart Trigger */}
             <button
               onClick={() => setIsCartOpen(true)}
               style={{
@@ -517,68 +590,95 @@ export default function App() {
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '24px' }}>
-          <button
-            onClick={() => setActiveTab('catalog')}
-            style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'none',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: activeTab === 'catalog' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'catalog' ? '3px solid #2563eb' : '3px solid transparent'
-            }}
-          >
-            📦 Product Catalog
-          </button>
-          <button
-            onClick={() => setActiveTab('orders')}
-            style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'none',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: activeTab === 'orders' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'orders' ? '3px solid #2563eb' : '3px solid transparent'
-            }}
-          >
-            🔄 Saga Checkout & Orders ({orders.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('architecture')}
-            style={{
-              padding: '12px 4px',
-              border: 'none',
-              background: 'none',
-              fontSize: '14px',
-              fontWeight: 700,
-              color: activeTab === 'architecture' ? '#2563eb' : '#64748b',
-              borderBottom: activeTab === 'architecture' ? '3px solid #2563eb' : '3px solid transparent'
-            }}
-          >
-            🌐 Microservices Architecture Map
-          </button>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px', display: 'flex', gap: '20px', overflowX: 'auto' }}>
+          {[
+            { id: 'catalog', label: '📦 Product Catalog' },
+            { id: 'orders', label: `🔄 Orders & Saga (${orders.length})` },
+            { id: 'profile', label: '👤 Customer Profile' },
+            { id: 'notifications', label: `📬 Notification Audit (${notifications.length})` },
+            { id: 'techmap', label: '🛠️ Architecture & Tech Stack Map' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              style={{
+                padding: '12px 4px',
+                border: 'none',
+                background: 'none',
+                fontSize: '14px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                color: activeTab === tab.id ? '#2563eb' : '#64748b',
+                borderBottom: activeTab === tab.id ? '3px solid #2563eb' : '3px solid transparent'
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* Main Body Content */}
+      {/* Main Body */}
       <main style={{ flex: 1, maxWidth: '1280px', margin: '0 auto', width: '100%', padding: '32px 24px' }}>
         {/* ================================================================= */}
         {/* TAB 1: PRODUCT CATALOG */}
         {/* ================================================================= */}
         {activeTab === 'catalog' && (
           <div>
-            <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
-                Enterprise Product Catalog
-              </h2>
-              <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
-                High-volume, cache-accelerated catalog backed by PostgreSQL 16 & Redis read-through cache.
-              </p>
+            {/* Search and Filters */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '16px',
+                marginBottom: '28px'
+              }}
+            >
+              <div>
+                <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+                  Enterprise Catalog
+                </h2>
+                <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
+                  Read-heavy catalog cached in Redis with sub-millisecond retrieval.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    minWidth: '220px'
+                  }}
+                />
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid #cbd5e1',
+                    fontSize: '14px',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="ALL">All Categories</option>
+                  <option value="Cloud & DevOps">Cloud & DevOps</option>
+                  <option value="Security">Security</option>
+                  <option value="SRE & Monitoring">SRE & Monitoring</option>
+                </select>
+              </div>
             </div>
 
+            {/* Product Cards Grid */}
             <div
               style={{
                 display: 'grid',
@@ -586,7 +686,7 @@ export default function App() {
                 gap: '24px'
               }}
             >
-              {products.map((p) => (
+              {filteredProducts.map((p) => (
                 <div
                   key={p.id}
                   style={{
@@ -597,8 +697,7 @@ export default function App() {
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.03)',
                     display: 'flex',
                     flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    transition: 'transform 0.2s, box-shadow 0.2s'
+                    justifyContent: 'space-between'
                   }}
                 >
                   <div>
@@ -637,29 +736,42 @@ export default function App() {
                       }}
                     >
                       <div>
-                        <span style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 600 }}>Price</span>
-                        <div style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a' }}>
+                        <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700 }}>Price</span>
+                        <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>
                           ${(p.priceCents / 100).toFixed(2)}
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => addToCart(p)}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          padding: '10px 18px',
-                          borderRadius: '8px',
-                          border: 'none',
-                          background: '#2563eb',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: '14px'
-                        }}
-                      >
-                        Add to Cart 🛒
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => setSelectedProduct(p)}
+                          style={{
+                            padding: '9px 14px',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            background: '#fff',
+                            color: '#334155',
+                            fontSize: '13px',
+                            fontWeight: 600
+                          }}
+                        >
+                          Details
+                        </button>
+                        <button
+                          onClick={() => addToCart(p)}
+                          style={{
+                            padding: '9px 16px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: '#2563eb',
+                            color: '#fff',
+                            fontWeight: 700,
+                            fontSize: '13px'
+                          }}
+                        >
+                          Add to Cart 🛒
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -674,129 +786,118 @@ export default function App() {
         {activeTab === 'orders' && (
           <div>
             <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
-                Distributed Saga Pipeline & Order History
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+                Distributed Order Management & Saga Visualizer
               </h2>
-              <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
-                Observe the asynchronous event-driven choreography across Order, Inventory, Payment, and Notification services.
+              <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
+                Observe state machine transitions across Order, Inventory, Payment, and Notification microservices.
               </p>
             </div>
 
-            {/* Live Saga Visualizer Card */}
+            {/* Saga Pipeline Card */}
             {sagaStep > 0 && (
               <div
                 style={{
                   background: '#ffffff',
                   border: '1px solid #bfdbfe',
                   borderRadius: '16px',
-                  padding: '28px',
-                  marginBottom: '36px',
-                  boxShadow: '0 10px 25px -5px rgba(37, 99, 235, 0.08)'
+                  padding: '24px',
+                  marginBottom: '32px',
+                  boxShadow: '0 8px 20px -4px rgba(37, 99, 235, 0.08)'
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a8a', margin: 0 }}>
-                    ⚡ Real-Time Choreographed Saga Execution
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '17px', fontWeight: 800, color: '#1e3a8a', margin: 0 }}>
+                    ⚡ Real-Time Choreographed Saga Pipeline
                   </h3>
                   <span style={{ fontSize: '12px', color: '#64748b', fontFamily: 'monospace' }}>
-                    Correlation ID: {latestOrder?.idempotency_key}
+                    Order ID: {latestSagaOrder?.id}
                   </span>
                 </div>
 
-                {/* 4 Pipeline Stages */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', position: 'relative' }}>
-                  {/* Step 1: Order Service */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                   <div
                     style={{
-                      padding: '16px',
+                      padding: '14px',
                       borderRadius: '10px',
                       background: sagaStep >= 1 ? '#eff6ff' : '#f8fafc',
-                      border: `2px solid ${sagaStep >= 1 ? '#3b82f6' : '#e2e8f0'}`,
-                      transition: 'all 0.3s ease'
+                      border: `2px solid ${sagaStep >= 1 ? '#3b82f6' : '#e2e8f0'}`
                     }}
                   >
-                    <div style={{ fontSize: '20px', marginBottom: '8px' }}>📝</div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: sagaStep >= 1 ? '#1e40af' : '#64748b' }}>
+                    <div style={{ fontSize: '18px' }}>📝</div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: sagaStep >= 1 ? '#1e40af' : '#64748b', marginTop: '4px' }}>
                       1. Order Created
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                      Order Service published `order.created` event
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Order Service: PENDING
                     </div>
                   </div>
 
-                  {/* Step 2: Inventory Service */}
                   <div
                     style={{
-                      padding: '16px',
+                      padding: '14px',
                       borderRadius: '10px',
                       background: sagaStep >= 2 ? '#eff6ff' : '#f8fafc',
-                      border: `2px solid ${sagaStep >= 2 ? '#3b82f6' : '#e2e8f0'}`,
-                      transition: 'all 0.3s ease'
+                      border: `2px solid ${sagaStep >= 2 ? '#3b82f6' : '#e2e8f0'}`
                     }}
                   >
-                    <div style={{ fontSize: '20px', marginBottom: '8px' }}>📦</div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: sagaStep >= 2 ? '#1e40af' : '#64748b' }}>
+                    <div style={{ fontSize: '18px' }}>📦</div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: sagaStep >= 2 ? '#1e40af' : '#64748b', marginTop: '4px' }}>
                       2. Stock Reserved
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                      Inventory row-level locked via `SELECT FOR UPDATE`
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Inventory Service: ROW LOCKED
                     </div>
                   </div>
 
-                  {/* Step 3: Payment Service */}
                   <div
                     style={{
-                      padding: '16px',
+                      padding: '14px',
                       borderRadius: '10px',
                       background: sagaStep >= 3 ? '#eff6ff' : '#f8fafc',
-                      border: `2px solid ${sagaStep >= 3 ? '#3b82f6' : '#e2e8f0'}`,
-                      transition: 'all 0.3s ease'
+                      border: `2px solid ${sagaStep >= 3 ? '#3b82f6' : '#e2e8f0'}`
                     }}
                   >
-                    <div style={{ fontSize: '20px', marginBottom: '8px' }}>💳</div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: sagaStep >= 3 ? '#1e40af' : '#64748b' }}>
+                    <div style={{ fontSize: '18px' }}>💳</div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: sagaStep >= 3 ? '#1e40af' : '#64748b', marginTop: '4px' }}>
                       3. Payment Settled
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                      Idempotent simulation emitted `payment.succeeded`
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Payment Service: IDEMPOTENT
                     </div>
                   </div>
 
-                  {/* Step 4: Notification Service */}
                   <div
                     style={{
-                      padding: '16px',
+                      padding: '14px',
                       borderRadius: '10px',
                       background: sagaStep >= 4 ? '#ecfdf5' : '#f8fafc',
-                      border: `2px solid ${sagaStep >= 4 ? '#10b981' : '#e2e8f0'}`,
-                      transition: 'all 0.3s ease'
+                      border: `2px solid ${sagaStep >= 4 ? '#10b981' : '#e2e8f0'}`
                     }}
                   >
-                    <div style={{ fontSize: '20px', marginBottom: '8px' }}>📬</div>
-                    <div style={{ fontWeight: 700, fontSize: '14px', color: sagaStep >= 4 ? '#065f46' : '#64748b' }}>
-                      4. Order Confirmed
+                    <div style={{ fontSize: '18px' }}>📬</div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: sagaStep >= 4 ? '#065f46' : '#64748b', marginTop: '4px' }}>
+                      4. Confirmed & Logged
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                      Notification logged & order marked `CONFIRMED`
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                      Notification Service: AUDITED
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Customer Orders Table */}
+            {/* Orders Table */}
             <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '16px' }}>
-                Your Transaction History
+              <div style={{ padding: '18px 24px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '16px' }}>
+                Customer Orders ({orders.length})
               </div>
 
               {orders.length === 0 ? (
                 <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
-                  <div style={{ fontSize: '36px', marginBottom: '12px' }}>🛍️</div>
-                  <div style={{ fontWeight: 600, fontSize: '16px' }}>No orders placed yet</div>
-                  <div style={{ fontSize: '14px', marginTop: '4px' }}>
-                    Select an item from the catalog and checkout to test the Saga choreography.
-                  </div>
+                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>🛍️</div>
+                  <div style={{ fontWeight: 700 }}>No orders recorded for this account</div>
+                  <div style={{ fontSize: '13px', marginTop: '4px' }}>Add items to your cart and checkout to test the Saga.</div>
                 </div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
@@ -805,21 +906,21 @@ export default function App() {
                       <tr style={{ background: '#f8fafc', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
                         <th style={{ padding: '14px 24px', fontWeight: 700 }}>Order ID</th>
                         <th style={{ padding: '14px 24px', fontWeight: 700 }}>Date</th>
-                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Amount</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Total</th>
                         <th style={{ padding: '14px 24px', fontWeight: 700 }}>Status</th>
-                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Idempotency Key</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {orders.map((o) => (
                         <tr key={o.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '14px 24px', fontFamily: 'monospace', color: '#2563eb', fontWeight: 600 }}>
+                          <td style={{ padding: '14px 24px', fontFamily: 'monospace', color: '#2563eb', fontWeight: 700 }}>
                             {o.id.substring(0, 18)}...
                           </td>
                           <td style={{ padding: '14px 24px', color: '#64748b' }}>
                             {new Date(o.created_at).toLocaleString()}
                           </td>
-                          <td style={{ padding: '14px 24px', fontWeight: 700, color: '#0f172a' }}>
+                          <td style={{ padding: '14px 24px', fontWeight: 800, color: '#0f172a' }}>
                             ${(o.total_cents / 100).toFixed(2)}
                           </td>
                           <td style={{ padding: '14px 24px' }}>
@@ -838,8 +939,20 @@ export default function App() {
                               {o.status}
                             </span>
                           </td>
-                          <td style={{ padding: '14px 24px', fontFamily: 'monospace', color: '#94a3b8', fontSize: '12px' }}>
-                            {o.idempotency_key.substring(0, 16)}...
+                          <td style={{ padding: '14px 24px' }}>
+                            <button
+                              onClick={() => setSelectedOrder(o)}
+                              style={{
+                                padding: '6px 12px',
+                                borderRadius: '6px',
+                                border: '1px solid #cbd5e1',
+                                background: '#fff',
+                                fontSize: '12px',
+                                fontWeight: 600
+                              }}
+                            >
+                              View Invoice
+                            </button>
                           </td>
                         </tr>
                       ))}
@@ -852,69 +965,436 @@ export default function App() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 3: MICROSERVICES ARCHITECTURE MAP */}
+        {/* TAB 3: CUSTOMER PROFILE (User Service) */}
         {/* ================================================================= */}
-        {activeTab === 'architecture' && (
-          <div>
-            <div style={{ marginBottom: '28px' }}>
-              <h2 style={{ fontSize: '26px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
-                System Topology & Service Discovery
+        {activeTab === 'profile' && (
+          <div style={{ maxWidth: '680px' }}>
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+                Customer Profile & Addresses
               </h2>
-              <p style={{ color: '#64748b', fontSize: '15px', marginTop: '4px' }}>
-                All 8 microservices run in isolated containers with private DNS resolution over internal Docker networks.
+              <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
+                Decoupled profile management backed by the dedicated User Service (`ecommerce_user`).
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px', padding: '28px' }}>
+              <form onSubmit={handleUpdateProfile}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                      First Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.firstName}
+                      onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                      Last Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.lastName}
+                      onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={profile.phone}
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>
+                    Street Address
+                  </label>
+                  <input
+                    type="text"
+                    value={profile.shippingAddress.street}
+                    onChange={(e) =>
+                      setProfile({
+                        ...profile,
+                        shippingAddress: { ...profile.shippingAddress, street: e.target.value }
+                      })
+                    }
+                    style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '12px', marginBottom: '24px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>City</label>
+                    <input
+                      type="text"
+                      value={profile.shippingAddress.city}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          shippingAddress: { ...profile.shippingAddress, city: e.target.value }
+                        })
+                      }
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>Country</label>
+                    <input
+                      type="text"
+                      value={profile.shippingAddress.country}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          shippingAddress: { ...profile.shippingAddress, country: e.target.value }
+                        })
+                      }
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '6px' }}>Zip</label>
+                    <input
+                      type="text"
+                      value={profile.shippingAddress.zip}
+                      onChange={(e) =>
+                        setProfile({
+                          ...profile,
+                          shippingAddress: { ...profile.shippingAddress, zip: e.target.value }
+                        })
+                      }
+                      style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  style={{
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#2563eb',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '14px'
+                  }}
+                >
+                  Save Profile Changes
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 4: NOTIFICATION AUDIT LOG (Notification Service) */}
+        {/* ================================================================= */}
+        {activeTab === 'notifications' && (
+          <div>
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+                Simulated Email Inbox & Domain Event Logs
+              </h2>
+              <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
+                Captured asynchronously by the Notification Service (`ecommerce_notification`) from RabbitMQ topic exchanges.
+              </p>
+            </div>
+
+            <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+              <div style={{ padding: '18px 24px', borderBottom: '1px solid #f1f5f9', fontWeight: 800, fontSize: '16px' }}>
+                Transactional Notifications ({notifications.length})
+              </div>
+
+              {notifications.length === 0 ? (
+                <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
+                  <div style={{ fontSize: '36px', marginBottom: '8px' }}>📬</div>
+                  <div style={{ fontWeight: 700 }}>No event notifications logged yet</div>
+                  <div style={{ fontSize: '13px', marginTop: '4px' }}>Events arrive here when orders or payments execute.</div>
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', color: '#64748b', borderBottom: '1px solid #e2e8f0' }}>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Event Type</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Recipient</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Timestamp</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Correlation ID</th>
+                        <th style={{ padding: '14px 24px', fontWeight: 700 }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notifications.map((n) => (
+                        <tr key={n.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                          <td style={{ padding: '14px 24px', fontWeight: 700, color: '#2563eb' }}>
+                            {n.notification_type}
+                          </td>
+                          <td style={{ padding: '14px 24px', color: '#334155' }}>
+                            {n.recipient_email}
+                          </td>
+                          <td style={{ padding: '14px 24px', color: '#64748b' }}>
+                            {new Date(n.sent_at).toLocaleTimeString()}
+                          </td>
+                          <td style={{ padding: '14px 24px', fontFamily: 'monospace', color: '#94a3b8', fontSize: '12px' }}>
+                            {n.correlation_id ? n.correlation_id.substring(0, 16) + '...' : 'system'}
+                          </td>
+                          <td style={{ padding: '14px 24px' }}>
+                            <span
+                              style={{
+                                padding: '3px 8px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: '#ecfdf5',
+                                color: '#065f46'
+                              }}
+                            >
+                              DELIVERED
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================================================================= */}
+        {/* TAB 5: ARCHITECTURE & TECH STACK MAP */}
+        {/* ================================================================= */}
+        {activeTab === 'techmap' && (
+          <div>
+            <div style={{ marginBottom: '28px' }}>
+              <h2 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.5px' }}>
+                Complete Technology Stack & Codebase Map
+              </h2>
+              <p style={{ color: '#64748b', fontSize: '14px', marginTop: '4px' }}>
+                Here is exactly where every single enterprise technology lives and operates in this repository.
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '20px' }}>
               {[
-                { name: 'API Gateway', port: '8000', network: 'Public & Internal', role: 'Reverse Proxy & Rate Limiter' },
-                { name: 'Auth Service', port: '5001', network: 'Internal Net', role: 'Argon2/scrypt, JWT Rotation' },
-                { name: 'User Service', port: '5002', network: 'Internal Net', role: 'Profile & Address Management' },
-                { name: 'Product Service', port: '5003', network: 'Internal Net', role: 'Catalog & Redis Caching' },
-                { name: 'Order Service', port: '5004', network: 'Internal Net', role: 'Saga Coordinator & State Machine' },
-                { name: 'Payment Service', port: '5005', network: 'Internal Net', role: 'Idempotency & Settlement' },
-                { name: 'Inventory Service', port: '5006', network: 'Internal Net', role: 'Atomic Stock Reservation' },
-                { name: 'Notification Service', port: '5007', network: 'Internal Net', role: 'AMQP Domain Event Consumer' },
-                { name: 'PostgreSQL 16', port: '5432', network: 'Internal Net', role: '7 Isolated Database Schemas' },
-                { name: 'Redis 7', port: '6379', network: 'Internal Net', role: 'In-Memory Cache & Token Bucket' },
-                { name: 'RabbitMQ 3', port: '5672/15672', network: 'Internal Net', role: 'Topic Message Broker' },
-                { name: 'React SPA', port: '3000', network: 'Public Net', role: 'Frontend Single Page Application' }
-              ].map((svc, idx) => (
+                {
+                  tech: 'React 18 + TypeScript + Vite',
+                  layer: 'Frontend Single Page Application',
+                  location: 'frontend/',
+                  purpose: 'Modern responsive client UI, shopping cart, customer auth, and Saga visualization.',
+                  icon: '⚛️'
+                },
+                {
+                  tech: 'NGINX Alpine',
+                  layer: 'Static Web Server',
+                  location: 'frontend/Dockerfile',
+                  purpose: 'Serves production compiled React assets on port 3000 with gzip compression.',
+                  icon: '🌐'
+                },
+                {
+                  tech: 'Node.js 20 & TypeScript',
+                  layer: 'Backend Microservices Runtime',
+                  location: 'services/*/',
+                  purpose: 'Executes all 8 microservices with strict TypeScript contracts and fast async I/O.',
+                  icon: '🟢'
+                },
+                {
+                  tech: 'Express & http-proxy-middleware',
+                  layer: 'API Gateway & Ingress Proxy',
+                  location: 'services/api-gateway/',
+                  purpose: 'Central port 8000 entry point, route forwarding, correlation IDs, and circuit breaking.',
+                  icon: '🚪'
+                },
+                {
+                  tech: 'Redis 7 (In-Memory RESP)',
+                  layer: 'Distributed Caching & Rate Limiting',
+                  location: 'docker-compose.yml (Port 6379)',
+                  purpose: 'Token-bucket rate limiting at API Gateway & catalog caching in Product Service.',
+                  icon: '⚡'
+                },
+                {
+                  tech: 'PostgreSQL 16 (Logical Isolation)',
+                  layer: 'ACID Relational Storage',
+                  location: 'docker/init-scripts/01-init-databases.sql',
+                  purpose: 'Owns 7 isolated databases (auth, user, product, inventory, order, payment, notification).',
+                  icon: '🐘'
+                },
+                {
+                  tech: 'RabbitMQ 3 (AMQP Topic Broker)',
+                  layer: 'Asynchronous Event Bus',
+                  location: 'docker-compose.yml (Ports 5672, 15672)',
+                  purpose: 'Choreographed Saga: order.created, inventory.reserved, payment.succeeded, payment.failed.',
+                  icon: '🐇'
+                },
+                {
+                  tech: 'Argon2 / scrypt + JWT Rotation',
+                  layer: 'Application Security & RBAC',
+                  location: 'services/auth-service/',
+                  purpose: 'Cryptographic password hashing and Refresh Token Rotation (RTR) against token theft.',
+                  icon: '🔐'
+                },
+                {
+                  tech: 'Multi-Stage Docker Builds',
+                  layer: 'Containerization',
+                  location: 'services/*/Dockerfile',
+                  purpose: 'Builder vs Runner stages, lean Alpine base images (<120MB), and non-root USER node.',
+                  icon: '🐳'
+                },
+                {
+                  tech: 'Docker Compose Networking',
+                  layer: 'Local Orchestration',
+                  location: 'docker-compose.yml',
+                  purpose: 'Isolates internal services on ecommerce-internal-net, exposing only Gateway & Frontend.',
+                  icon: '🐙'
+                },
+                {
+                  tech: 'Structured JSON Logging',
+                  layer: 'Observability & SRE',
+                  location: 'shared/logger/',
+                  purpose: 'Attaches x-correlation-id across HTTP requests, RabbitMQ messages, and log streams.',
+                  icon: '📊'
+                },
+                {
+                  tech: 'Terraform & Helm (Upcoming)',
+                  layer: 'Cloud & Infrastructure as Code',
+                  location: 'terraform/ & helm/',
+                  purpose: 'Provisions AWS Mumbai (ap-south-1) VPC, EKS, RDS, and packages charts for Kubernetes.',
+                  icon: '☁️'
+                }
+              ].map((item, idx) => (
                 <div
                   key={idx}
                   style={{
                     background: '#ffffff',
                     border: '1px solid #e2e8f0',
                     borderRadius: '12px',
-                    padding: '20px',
+                    padding: '22px',
                     boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ fontWeight: 800, fontSize: '16px', color: '#0f172a' }}>{svc.name}</span>
-                    <span
-                      style={{
-                        background: '#ecfdf5',
-                        color: '#065f46',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '10px'
-                      }}
-                    >
-                      Port {svc.port}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '24px' }}>{item.icon}</span>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '15px', color: '#0f172a' }}>{item.tech}</div>
+                      <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 600 }}>{item.layer}</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '13px', color: '#2563eb', fontWeight: 600, marginBottom: '6px' }}>
-                    Network: {svc.network}
+                  <div style={{ fontSize: '12px', color: '#94a3b8', fontFamily: 'monospace', marginBottom: '8px' }}>
+                    📁 {item.location}
                   </div>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>{svc.role}</div>
+                  <p style={{ fontSize: '13px', color: '#475569', lineHeight: 1.4 }}>{item.purpose}</p>
                 </div>
               ))}
             </div>
           </div>
         )}
       </main>
+
+      {/* Product Detail Modal */}
+      {selectedProduct && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.5)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '500px',
+              width: '100%',
+              padding: '28px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <span
+                style={{
+                  background: '#eff6ff',
+                  color: '#2563eb',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '4px 10px',
+                  borderRadius: '6px'
+                }}
+              >
+                {selectedProduct.categoryName || 'Curriculum'}
+              </span>
+              <button
+                onClick={() => setSelectedProduct(null)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <h3 style={{ fontSize: '20px', fontWeight: 800, color: '#0f172a', marginBottom: '10px' }}>
+              {selectedProduct.name}
+            </h3>
+            <p style={{ color: '#64748b', fontSize: '14px', lineHeight: 1.5, marginBottom: '20px' }}>
+              {selectedProduct.description}
+            </p>
+
+            <div style={{ background: '#f8fafc', padding: '14px', borderRadius: '8px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Product UUID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{selectedProduct.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Inventory Stock:</span>
+                <span style={{ color: '#10b981', fontWeight: 700 }}>500 units available</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Price:</span>
+                <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                  ${(selectedProduct.priceCents / 100).toFixed(2)} USD
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={() => {
+                  addToCart(selectedProduct);
+                  setSelectedProduct(null);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#2563eb',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '14px'
+                }}
+              >
+                Add to Cart 🛒
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cart Drawer */}
       {isCartOpen && (
@@ -925,14 +1405,13 @@ export default function App() {
             background: 'rgba(15, 23, 42, 0.5)',
             zIndex: 1000,
             display: 'flex',
-            justifyContent: 'flex-end',
-            animation: 'fadeIn 0.2s'
+            justifyContent: 'flex-end'
           }}
         >
           <div
             style={{
               width: '100%',
-              maxWidth: '420px',
+              maxWidth: '440px',
               background: '#ffffff',
               height: '100%',
               display: 'flex',
@@ -1017,6 +1496,16 @@ export default function App() {
                       </div>
                     </div>
                   ))}
+
+                  {/* Shipping address recap */}
+                  <div style={{ marginTop: '16px', padding: '14px', background: '#eff6ff', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 700, color: '#1e40af', marginBottom: '4px' }}>
+                      📍 Delivery Destination
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#334155' }}>
+                      {shippingAddress.street}, {shippingAddress.city}, {shippingAddress.country}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1046,6 +1535,83 @@ export default function App() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Order Detail Modal */}
+      {selectedOrder && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.5)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              maxWidth: '540px',
+              width: '100%',
+              padding: '28px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                Order Invoice Breakdown
+              </h3>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                style={{ background: 'none', border: 'none', fontSize: '18px', color: '#64748b' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '10px', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Order UUID:</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{selectedOrder.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Status:</span>
+                <span style={{ fontWeight: 800, color: selectedOrder.status === 'CONFIRMED' ? '#059669' : '#d97706' }}>
+                  {selectedOrder.status}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Idempotency Key:</span>
+                <span style={{ fontFamily: 'monospace', fontSize: '11px' }}>{selectedOrder.idempotency_key}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                <span style={{ color: '#64748b' }}>Total Billed:</span>
+                <span style={{ fontWeight: 800, color: '#0f172a' }}>
+                  ${(selectedOrder.total_cents / 100).toFixed(2)} USD
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedOrder(null)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '8px',
+                border: 'none',
+                background: '#2563eb',
+                color: '#fff',
+                fontWeight: 700
+              }}
+            >
+              Close Invoice
+            </button>
           </div>
         </div>
       )}
@@ -1098,7 +1664,7 @@ export default function App() {
                       value={authFirstName}
                       onChange={(e) => setAuthFirstName(e.target.value)}
                       required
-                      placeholder="Jane"
+                      placeholder="DevOps"
                       style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                     />
                   </div>
@@ -1111,7 +1677,7 @@ export default function App() {
                       value={authLastName}
                       onChange={(e) => setAuthLastName(e.target.value)}
                       required
-                      placeholder="Doe"
+                      placeholder="Engineer"
                       style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                     />
                   </div>
@@ -1127,7 +1693,7 @@ export default function App() {
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
                   required
-                  placeholder="name@company.com"
+                  placeholder="engineer@enterprise.example"
                   style={{ width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1' }}
                 />
               </div>

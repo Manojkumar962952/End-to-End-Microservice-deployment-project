@@ -98,9 +98,15 @@ app.use(
 // 6. Inventory Service Routes (Internal or Admin)
 app.use(
   '/api/v1/inventory',
-  requireAuth,
   createRateLimiter(60, 60),
   createServiceProxy(config.services.inventory, { '^/api/v1/inventory': '/inventory' })
+);
+
+// 7. Notification Service Routes (Event audit viewer)
+app.use(
+  '/api/v1/notifications',
+  createRateLimiter(60, 60),
+  createServiceProxy(config.services.notification, { '^/api/v1/notifications': '/notifications' })
 );
 
 // Catch-all 404
