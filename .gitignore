@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build Outputs
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Environment variables and secrets - NEVER COMMIT SECRETS
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+id_rsa
+*.id_rsa
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and Editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+
+# Docker data directories (when mounted locally)
+docker-data/
+postgres-data/
+redis-data/
+rabbitmq-data/
+
+# Kubernetes / Helm
+*.tgz
+.helm/
+helm-charts/*.tgz

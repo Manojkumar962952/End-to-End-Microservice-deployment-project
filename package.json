@@ -1,0 +1,20 @@
+{
+  "name": "enterprise-ecommerce-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-grade enterprise e-commerce microservices platform with DevOps implementation",
+  "workspaces": [
+    "shared/*",
+    "services/*",
+    "frontend"
+  ],
+  "scripts": {
+    "build:all": "npm run build --workspaces --if-present",
+    "test:all": "npm run test --workspaces --if-present",
+    "lint:all": "npm run lint --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
