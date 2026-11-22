@@ -1,0 +1,264 @@
+version: '3.8'
+
+networks:
+  public-net:
+    driver: bridge
+    name: ecommerce-public-net
+  internal-net:
+    driver: bridge
+    internal: false
+    name: ecommerce-internal-net
+
+volumes:
+  postgres_data:
+    name: ecommerce-postgres-data
+  redis_data:
+    name: ecommerce-redis-data
+  rabbitmq_data:
+    name: ecommerce-rabbitmq-data
+
+services:
+  # ============================================================================
+  # Supporting Infrastructure: PostgreSQL 16
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ecommerce-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_secret
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-scripts/01-init-databases.sql:/docker-entrypoint-initdb.d/01-init-databases.sql:ro
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ============================================================================
+  # Supporting Infrastructure: Redis 7
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ecommerce-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ============================================================================
+  # Supporting Infrastructure: RabbitMQ 3
+  # ============================================================================
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    restart: unless-stopped
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - internal-net
+    ports:
+      - "15672:15672" # Management UI for observability
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # ============================================================================
+  # Backend Microservices
+  # ============================================================================
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    container_name: ecommerce-auth-service
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_auth
+      JWT_ACCESS_SECRET: dev_jwt_access_secret_do_not_use_in_prod_12345678
+      JWT_REFRESH_SECRET: dev_jwt_refresh_secret_do_not_use_in_prod_87654321
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user-service/Dockerfile
+    container_name: ecommerce-user-service
+    restart: unless-stopped
+    environment:
+      PORT: 5002
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_user
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  product-service:
+    build:
+      context: .
+      dockerfile: services/product-service/Dockerfile
+    container_name: ecommerce-product-service
+    restart: unless-stopped
+    environment:
+      PORT: 5003
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_product
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  inventory-service:
+    build:
+      context: .
+      dockerfile: services/inventory-service/Dockerfile
+    container_name: ecommerce-inventory-service
+    restart: unless-stopped
+    environment:
+      PORT: 5006
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_inventory
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  order-service:
+    build:
+      context: .
+      dockerfile: services/order-service/Dockerfile
+    container_name: ecommerce-order-service
+    restart: unless-stopped
+    environment:
+      PORT: 5004
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_order
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: ecommerce-payment-service
+    restart: unless-stopped
+    environment:
+      PORT: 5005
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_payment
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: ecommerce-notification-service
+    restart: unless-stopped
+    environment:
+      PORT: 5007
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres_secret
+      DB_NAME: ecommerce_notification
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+    networks:
+      - internal-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ============================================================================
+  # Public API Gateway (Only service exposed on port 8000)
+  # ============================================================================
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: ecommerce-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: dev_jwt_access_secret_do_not_use_in_prod_12345678
+      AUTH_SERVICE_URL: http://auth-service:5001
+      USER_SERVICE_URL: http://user-service:5002
+      PRODUCT_SERVICE_URL: http://product-service:5003
+      ORDER_SERVICE_URL: http://order-service:5004
+      PAYMENT_SERVICE_URL: http://payment-service:5005
+      INVENTORY_SERVICE_URL: http://inventory-service:5006
+      NOTIFICATION_SERVICE_URL: http://notification-service:5007
+    networks:
+      - public-net
+      - internal-net
+    depends_on:
+      - auth-service
+      - product-service
+      - order-service

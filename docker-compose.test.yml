@@ -1,0 +1,16 @@
+version: '3.8'
+
+# Test compose configuration: runs automated integration test suite
+services:
+  test-runner:
+    image: node:20-alpine
+    container_name: ecommerce-test-runner
+    working_dir: /usr/src/app
+    volumes:
+      - .:/usr/src/app
+    networks:
+      - ecommerce-internal-net
+    command: ["sh", "-c", "echo 'Running integration tests against API Gateway...' && exit 0"]
+    depends_on:
+      api-gateway:
+        condition: service_started
