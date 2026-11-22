@@ -1,11 +1,11 @@
-# Multi-Stage Dockerfile for Product Service
 FROM node:20-alpine AS builder
 
 WORKDIR /usr/src/app
 
 COPY package.json ./
 COPY shared ./shared
-COPY services/product-service ./services/product-service
+COPY services ./services
+COPY frontend ./frontend
 
 RUN npm install
 RUN npm run build --workspace=@enterprise/contracts
@@ -19,16 +19,10 @@ WORKDIR /usr/src/app
 ENV NODE_ENV=production
 
 COPY package.json ./
-COPY shared ./shared
-COPY services/product-service ./services/product-service
-
-RUN npm install --omit=dev
-RUN npm run build --workspace=@enterprise/contracts
-RUN npm run build --workspace=@enterprise/logger
-RUN npm run build --workspace=@enterprise/middleware
-RUN npm run build --workspace=@enterprise/product-service
-
+COPY --from=builder /usr/src/app/node_modules ./node_modules
+COPY --from=builder /usr/src/app/shared ./shared
 COPY --from=builder /usr/src/app/services/product-service/dist ./services/product-service/dist
+COPY --from=builder /usr/src/app/services/product-service/package.json ./services/product-service/package.json
 
 USER node
 
