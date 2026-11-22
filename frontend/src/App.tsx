@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Product {
   id: string;
@@ -25,11 +25,29 @@ export default function App() {
     try {
       const res = await fetch(`${API_URL}/products`);
       const json = await res.json();
-      if (json.success) {
+      if (json.success && json.data.length > 0) {
         setProducts(json.data);
+      } else {
+        // Fallback demo product if catalog is empty initially
+        setProducts([
+          {
+            id: 'a0000000-0000-0000-0000-000000000001',
+            name: 'Enterprise Cloud Architecture Masterclass',
+            priceCents: 4999,
+            description: 'Production-grade AWS, Kubernetes, Terraform & Microservices curriculum.'
+          }
+        ]);
       }
     } catch {
-      setStatusMessage('API Gateway is unreachable or initializing...');
+      setStatusMessage('API Gateway is initializing or unreachable. Retrying in background...');
+      setProducts([
+        {
+          id: 'a0000000-0000-0000-0000-000000000001',
+          name: 'Enterprise Cloud Architecture Masterclass',
+          priceCents: 4999,
+          description: 'Production-grade AWS, Kubernetes, Terraform & Microservices curriculum.'
+        }
+      ]);
     }
   };
 
@@ -89,8 +107,8 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        setOrderStatus(`Order Created: ${data.data.id} (Status: ${data.data.status})`);
-        setStatusMessage('Order submitted! The Choreographed Saga is processing the checkout asynchronously.');
+        setOrderStatus(`Order Placed: ${data.data.id} (Status: ${data.data.status})`);
+        setStatusMessage('Order accepted! The Choreographed Saga is processing the checkout asynchronously.');
       } else {
         setStatusMessage(`Order error: ${data.error.message}`);
       }
@@ -144,19 +162,21 @@ export default function App() {
       <section style={{ background: '#ffffff', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <h2 style={{ fontSize: '18px', marginTop: 0 }}>Product Catalog (Redis Cached)</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '16px' }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>Enterprise Cloud Architecture Course</h3>
-            <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 12px 0' }}>Deep dive into AWS, Kubernetes, Terraform, and Microservices.</p>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 'bold', fontSize: '16px' }}>$49.99</span>
-              <button
-                onClick={() => handlePlaceOrder('a0000000-0000-0000-0000-000000000001')}
-                style={{ padding: '6px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-              >
-                Checkout Item
-              </button>
+          {products.map((p) => (
+            <div key={p.id} style={{ border: '1px solid #e2e8f0', borderRadius: '6px', padding: '16px' }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>{p.name}</h3>
+              <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 12px 0' }}>{p.description}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 'bold', fontSize: '16px' }}>${(p.priceCents / 100).toFixed(2)}</span>
+                <button
+                  onClick={() => handlePlaceOrder(p.id)}
+                  style={{ padding: '6px 14px', background: '#10b981', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+                >
+                  Checkout Item
+                </button>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
         {orderStatus && <p style={{ marginTop: '16px', fontWeight: 'bold', color: '#047857' }}>{orderStatus}</p>}
       </section>

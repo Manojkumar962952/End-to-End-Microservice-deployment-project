@@ -2,11 +2,11 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { Pool } from 'pg';
-import amqplib, { Channel, Connection } from 'amqplib';
+import amqplib from 'amqplib';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '@enterprise/logger';
-import { correlationIdMiddleware, createErrorHandler, AppError } from '@enterprise/middleware';
+import { correlationIdMiddleware, createErrorHandler } from '@enterprise/middleware';
 import { EventTypes, InventoryReservedEvent } from '@enterprise/contracts';
 
 dotenv.config();
@@ -28,27 +28,28 @@ const config = {
 
 const logger = createLogger(config.serviceName);
 const pool = new Pool(config.db);
-let channel: Channel | null = null;
+let channel: any = null;
 const EXCHANGE = 'ecommerce.events';
 
 async function initRabbitMQ() {
   try {
-    const conn: Connection = await amqplib.connect(config.rabbitmq.url);
-    channel = await conn.createChannel();
-    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+    const conn: any = await amqplib.connect(config.rabbitmq.url);
+    const ch = await conn.createChannel();
+    channel = ch;
+    await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-    const q = await channel.assertQueue('payment.inventory.reserved', { durable: true });
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.INVENTORY_RESERVED);
+    const q = await ch.assertQueue('payment.inventory.reserved', { durable: true });
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.INVENTORY_RESERVED);
 
     logger.info('Payment service connected to RabbitMQ.');
 
-    channel.consume(q.queue, async (msg) => {
+    ch.consume(q.queue, async (msg: any) => {
       if (!msg) return;
       const content = JSON.parse(msg.content.toString()) as InventoryReservedEvent;
       await processSimulatedPayment(content.payload.orderId, content.correlationId);
-      channel?.ack(msg);
+      ch.ack(msg);
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.warn('RabbitMQ connection retry in 5s...', undefined, err as Error);
     setTimeout(initRabbitMQ, 5000);
   }
@@ -98,7 +99,7 @@ async function processSimulatedPayment(orderId: string, correlationId: string) {
         reason: failureReason
       }, correlationId);
     }
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     logger.error(`Error processing payment for order ${orderId}`, { correlationId }, err as Error);
     publishEvent(EventTypes.PAYMENT_FAILED, { orderId, reason: 'PAYMENT_GATEWAY_ERROR' }, correlationId);

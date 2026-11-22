@@ -2,11 +2,10 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { Pool } from 'pg';
-import amqplib, { Channel, Connection } from 'amqplib';
+import amqplib from 'amqplib';
 import dotenv from 'dotenv';
 import { createLogger } from '@enterprise/logger';
 import { correlationIdMiddleware, createErrorHandler } from '@enterprise/middleware';
-import { EventTypes } from '@enterprise/contracts';
 
 dotenv.config();
 
@@ -27,23 +26,24 @@ const config = {
 
 const logger = createLogger(config.serviceName);
 const pool = new Pool(config.db);
-let channel: Channel | null = null;
+let channel: any = null;
 const EXCHANGE = 'ecommerce.events';
 
 async function initRabbitMQ() {
   try {
-    const conn: Connection = await amqplib.connect(config.rabbitmq.url);
-    channel = await conn.createChannel();
-    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+    const conn: any = await amqplib.connect(config.rabbitmq.url);
+    const ch = await conn.createChannel();
+    channel = ch;
+    await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-    const q = await channel.assertQueue('notification.events.log', { durable: true });
-    await channel.bindQueue(q.queue, EXCHANGE, 'order.*');
-    await channel.bindQueue(q.queue, EXCHANGE, 'payment.*');
-    await channel.bindQueue(q.queue, EXCHANGE, 'inventory.*');
+    const q = await ch.assertQueue('notification.events.log', { durable: true });
+    await ch.bindQueue(q.queue, EXCHANGE, 'order.*');
+    await ch.bindQueue(q.queue, EXCHANGE, 'payment.*');
+    await ch.bindQueue(q.queue, EXCHANGE, 'inventory.*');
 
     logger.info('Notification service listening on topic queue.');
 
-    channel.consume(q.queue, async (msg) => {
+    ch.consume(q.queue, async (msg: any) => {
       if (!msg) return;
       const content = JSON.parse(msg.content.toString());
       const routingKey = msg.fields.routingKey;
@@ -55,13 +55,13 @@ async function initRabbitMQ() {
           ['customer@enterprise.example', routingKey, content.correlationId || null, JSON.stringify(content.payload)]
         );
         logger.info(`Notification recorded for event ${routingKey}`, { correlationId: content.correlationId });
-      } catch (err) {
+      } catch (err: any) {
         logger.error(`Failed to log notification for event ${routingKey}`, undefined, err as Error);
       }
 
-      channel?.ack(msg);
+      ch.ack(msg);
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.warn('RabbitMQ connection retry in 5s...', undefined, err as Error);
     setTimeout(initRabbitMQ, 5000);
   }

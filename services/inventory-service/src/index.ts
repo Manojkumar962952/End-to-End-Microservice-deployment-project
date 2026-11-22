@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { Pool } from 'pg';
-import amqplib, { Channel, Connection } from 'amqplib';
+import amqplib from 'amqplib';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '@enterprise/logger';
@@ -28,24 +28,25 @@ const config = {
 
 const logger = createLogger(config.serviceName);
 const pool = new Pool(config.db);
-let channel: Channel | null = null;
+let channel: any = null;
 
 const EXCHANGE = 'ecommerce.events';
 
 async function initRabbitMQ() {
   try {
-    const conn: Connection = await amqplib.connect(config.rabbitmq.url);
-    channel = await conn.createChannel();
-    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+    const conn: any = await amqplib.connect(config.rabbitmq.url);
+    const ch = await conn.createChannel();
+    channel = ch;
+    await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
     // Queue for order creation events
-    const q = await channel.assertQueue('inventory.order.created', { durable: true });
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.ORDER_CREATED);
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_FAILED);
+    const q = await ch.assertQueue('inventory.order.created', { durable: true });
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.ORDER_CREATED);
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_FAILED);
 
     logger.info('Connected to RabbitMQ and initialized inventory queues.');
 
-    channel.consume(q.queue, async (msg) => {
+    ch.consume(q.queue, async (msg: any) => {
       if (!msg) return;
       const content = JSON.parse(msg.content.toString());
       const routingKey = msg.fields.routingKey;
@@ -56,9 +57,9 @@ async function initRabbitMQ() {
         await handlePaymentFailed(content as PaymentFailedEvent);
       }
 
-      channel?.ack(msg);
+      ch.ack(msg);
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.warn('RabbitMQ connection retry in 5s...', undefined, err as Error);
     setTimeout(initRabbitMQ, 5000);
   }
@@ -118,7 +119,7 @@ async function handleOrderCreated(event: OrderCreatedEvent) {
     await client.query('COMMIT');
     logger.info(`Stock reserved for order ${orderId}`, { correlationId, reservationId });
     publishEvent(EventTypes.INVENTORY_RESERVED, { orderId, reservationId }, correlationId);
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     logger.error(`Stock reservation transaction failed for ${orderId}`, { correlationId }, err as Error);
     publishEvent(EventTypes.INVENTORY_FAILED, { orderId, reason: 'SYSTEM_ERROR' }, correlationId);
@@ -151,7 +152,7 @@ async function handlePaymentFailed(event: PaymentFailedEvent) {
     await client.query(`UPDATE stock_reservations SET status = 'RELEASED' WHERE order_id = $1`, [orderId]);
     await client.query('COMMIT');
     logger.info(`Compensating transaction: released stock for failed order ${orderId}`, { correlationId });
-  } catch (err) {
+  } catch (err: any) {
     await client.query('ROLLBACK');
     logger.error(`Failed to release stock for order ${orderId}`, { correlationId }, err as Error);
   } finally {

@@ -2,7 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import { Pool } from 'pg';
-import amqplib, { Channel, Connection } from 'amqplib';
+import amqplib from 'amqplib';
 import dotenv from 'dotenv';
 import { v4 as uuidv4 } from 'uuid';
 import { createLogger } from '@enterprise/logger';
@@ -28,23 +28,24 @@ const config = {
 
 const logger = createLogger(config.serviceName);
 const pool = new Pool(config.db);
-let channel: Channel | null = null;
+let channel: any = null;
 const EXCHANGE = 'ecommerce.events';
 
 async function initRabbitMQ() {
   try {
-    const conn: Connection = await amqplib.connect(config.rabbitmq.url);
-    channel = await conn.createChannel();
-    await channel.assertExchange(EXCHANGE, 'topic', { durable: true });
+    const conn: any = await amqplib.connect(config.rabbitmq.url);
+    const ch = await conn.createChannel();
+    channel = ch;
+    await ch.assertExchange(EXCHANGE, 'topic', { durable: true });
 
-    const q = await channel.assertQueue('order.lifecycle.updates', { durable: true });
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.INVENTORY_FAILED);
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_SUCCEEDED);
-    await channel.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_FAILED);
+    const q = await ch.assertQueue('order.lifecycle.updates', { durable: true });
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.INVENTORY_FAILED);
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_SUCCEEDED);
+    await ch.bindQueue(q.queue, EXCHANGE, EventTypes.PAYMENT_FAILED);
 
     logger.info('Order service connected to RabbitMQ.');
 
-    channel.consume(q.queue, async (msg) => {
+    ch.consume(q.queue, async (msg: any) => {
       if (!msg) return;
       const content = JSON.parse(msg.content.toString());
       const routingKey = msg.fields.routingKey;
@@ -57,9 +58,9 @@ async function initRabbitMQ() {
         logger.info(`Order ${content.payload.orderId} marked as CONFIRMED`);
       }
 
-      channel?.ack(msg);
+      ch.ack(msg);
     });
-  } catch (err) {
+  } catch (err: any) {
     logger.warn('RabbitMQ connection retry in 5s...', undefined, err as Error);
     setTimeout(initRabbitMQ, 5000);
   }
@@ -102,11 +103,12 @@ app.post('/orders', async (req, res, next) => {
     const existing = await client.query('SELECT * FROM orders WHERE idempotency_key = $1', [idempotencyKey]);
     if (existing.rows.length > 0) {
       await client.query('COMMIT');
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
         data: existing.rows[0],
         meta: { correlationId, timestamp: new Date().toISOString(), duplicate: true }
       });
+      return;
     }
 
     // Fixed dummy price calculation per item for simulation
