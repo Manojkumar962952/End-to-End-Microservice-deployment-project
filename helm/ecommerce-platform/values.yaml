@@ -1,0 +1,171 @@
+# Default values for ecommerce-platform umbrella chart
+global:
+  imageRegistry: "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
+  imagePullPolicy: "IfNotPresent"
+  imageTag: "latest"
+  environment: "production"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  host: "api.ecommerce.com"
+  tls:
+    enabled: true
+    secretName: "ecommerce-api-tls-cert"
+
+database:
+  enabled: true
+  host: "postgres"
+  port: 5432
+  user: "ecommerce_admin"
+  password: "admin_secure_password_2026"
+
+redis:
+  enabled: true
+  host: "redis"
+  port: 6379
+
+rabbitmq:
+  enabled: true
+  host: "rabbitmq"
+  port: 5672
+  user: "guest"
+  password: "guest"
+
+# Microservices Map
+services:
+  apiGateway:
+    name: "api-gateway"
+    port: 8000
+    replicas: 2
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
+
+  authService:
+    name: "auth-service"
+    port: 5001
+    replicas: 2
+    dbName: "ecommerce_auth"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+
+  userService:
+    name: "user-service"
+    port: 5002
+    replicas: 2
+    dbName: "ecommerce_user"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+
+  productService:
+    name: "product-service"
+    port: 5003
+    replicas: 2
+    dbName: "ecommerce_product"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+
+  orderService:
+    name: "order-service"
+    port: 5004
+    replicas: 2
+    dbName: "ecommerce_order"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
+
+  paymentService:
+    name: "payment-service"
+    port: 5005
+    replicas: 2
+    dbName: "ecommerce_payment"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+
+  inventoryService:
+    name: "inventory-service"
+    port: 5006
+    replicas: 2
+    dbName: "ecommerce_inventory"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+
+  notificationService:
+    name: "notification-service"
+    port: 5007
+    replicas: 1
+    dbName: "ecommerce_notification"
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "250m"
+        memory: "128Mi"
+
+  frontend:
+    name: "frontend"
+    port: 80
+    replicas: 2
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "250m"
+        memory: "128Mi"

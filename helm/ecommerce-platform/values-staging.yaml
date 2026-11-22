@@ -1,0 +1,21 @@
+# Staging Environment Overrides
+global:
+  imageRegistry: "123456789012.dkr.ecr.ap-south-1.amazonaws.com"
+  imagePullPolicy: "Always"
+  imageTag: "staging"
+  environment: "staging"
+
+ingress:
+  enabled: true
+  host: "staging-api.ecommerce.com"
+  tls:
+    enabled: true
+    secretName: "staging-ecommerce-api-tls-cert"
+
+services:
+  apiGateway:
+    replicas: 2
+  orderService:
+    replicas: 2
+  productService:
+    replicas: 2

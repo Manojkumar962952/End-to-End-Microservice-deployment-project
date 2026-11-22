@@ -1,0 +1,9 @@
+apiVersion: v2
+name: ecommerce-platform
+description: Enterprise E-Commerce Distributed Microservices Umbrella Chart
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: SRE Platform Team
+    email: sre-team@enterprise.com

@@ -1,0 +1,16 @@
+{{- range $key, $svc := .Values.services }}
+{{- if and $svc.pdb $svc.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $svc.name }}-pdb
+  labels:
+    app: {{ $svc.name }}
+spec:
+  minAvailable: {{ $svc.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: {{ $svc.name }}
+{{- end }}
+{{- end }}

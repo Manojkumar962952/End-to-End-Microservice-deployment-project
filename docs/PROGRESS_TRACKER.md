@@ -82,8 +82,11 @@
 ---
 
 ## Phase 8: Helm Chart Packaging
-- [ ] Enterprise umbrella & subcharts
-- [ ] Environment-specific values (`values-dev.yaml`, `values-prod.yaml`)
+- [x] Enterprise umbrella chart (`helm/ecommerce-platform/Chart.yaml`)
+- [x] Parameterized values files (`values.yaml`, `values-dev.yaml`, `values-staging.yaml`, `values-prod.yaml`)
+- [x] Dynamic templating for 8 microservices & frontend (`templates/services-deployments.yaml`)
+- [x] Backing services manifests for Postgres, Redis, and RabbitMQ (`templates/backing-services.yaml`)
+- [x] ConfigMaps, Secrets, Ingress, HPA, PDB, and NetworkPolicies templates (`templates/`)
 
 ---
 
