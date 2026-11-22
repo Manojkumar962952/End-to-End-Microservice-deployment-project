@@ -45,17 +45,20 @@
 ---
 
 ## Phase 4: Frontend Development (React + TypeScript + Vite)
-- [ ] Responsive modern SPA with Tailwind CSS
-- [ ] Customer authentication flow (JWT storage & refresh rotation)
-- [ ] Product catalog, search & item detail
-- [ ] Shopping cart & checkout state flow
-- [ ] Real-time order tracking simulation
+- [x] Responsive modern SPA with Tailwind CSS & Glassmorphism UI (`frontend/`)
+- [x] Customer authentication flow (JWT storage, login/register modal, refresh rotation)
+- [x] Product catalog, category filters, live keyword search & product detail modal
+- [x] Shopping cart drawer, quantity controls & checkout state flow
+- [x] Interactive Technology Stack Explorer & Visual Request Flow Map
+- [x] Customer Profile Manager & simulated Transactional Email / Notification Audit
+- [x] Real-time order tracking & printable Order Invoice modal
 
 ---
 
 ## Phase 5: Application Security & OWASP Hardening
-- [ ] Security documentation & developer security checklist
-- [ ] Dynamic and static analysis configurations
+- [x] Security documentation & developer security checklist (`docs/07-application-security/README.md`)
+- [x] OWASP Top 10 mitigations (Argon2/scrypt, parameterized SQL, Token Bucket rate limiting, Helmet, non-root `USER node`)
+- [x] Complete Section 20 Mandatory Documentation (Chapters 01 to 27 fully written with 14-section format)
 
 ---
 
