@@ -1,4 +1,4 @@
-﻿# Chapter 25: Disaster Recovery (DR), Business Continuity & Multi-Region Strategies
+# Chapter 25: Disaster Recovery (DR), Business Continuity & Multi-Region Strategies
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

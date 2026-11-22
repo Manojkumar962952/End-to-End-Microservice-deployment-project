@@ -1,4 +1,4 @@
-﻿# Chapter 10: SAST, DAST, Container Scanning & DevSecOps
+# Chapter 10: SAST, DAST, Container Scanning & DevSecOps
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

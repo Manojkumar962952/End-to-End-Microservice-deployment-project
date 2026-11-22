@@ -1,4 +1,4 @@
-﻿# Chapter 27: Production SRE Incident Response Runbooks & Playbooks
+# Chapter 27: Production SRE Incident Response Runbooks & Playbooks
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

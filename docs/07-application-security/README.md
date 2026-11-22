@@ -1,4 +1,4 @@
-﻿# Enterprise Application Security Guide & OWASP Top 10 Hardening
+# Enterprise Application Security Guide & OWASP Top 10 Hardening
 
 ```
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+

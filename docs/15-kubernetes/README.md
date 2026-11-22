@@ -1,4 +1,4 @@
-﻿# Chapter 15: Enterprise Kubernetes Cluster Architecture & Workloads
+# Chapter 15: Enterprise Kubernetes Cluster Architecture & Workloads
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 13: Infrastructure as Code (IaC) with HashiCorp Terraform
+# Chapter 13: Infrastructure as Code (IaC) with HashiCorp Terraform
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

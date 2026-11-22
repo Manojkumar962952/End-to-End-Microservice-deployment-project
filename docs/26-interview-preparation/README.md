@@ -1,4 +1,4 @@
-﻿# Chapter 26: Senior DevOps & SRE Interview Preparation Guide
+# Chapter 26: Senior DevOps & SRE Interview Preparation Guide
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

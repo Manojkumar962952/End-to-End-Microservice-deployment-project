@@ -1,4 +1,4 @@
-﻿# Chapter 20: Enterprise Observability: Prometheus, Grafana & SRE Golden Signals
+# Chapter 20: Enterprise Observability: Prometheus, Grafana & SRE Golden Signals
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Microservices Architecture & Domain Decomposition Guide
+# Microservices Architecture & Domain Decomposition Guide
 
 ```
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+

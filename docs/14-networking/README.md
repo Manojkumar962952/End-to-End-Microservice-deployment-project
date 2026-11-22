@@ -1,4 +1,4 @@
-﻿# Enterprise Networking & Request Packet Lifecycle Guide
+# Enterprise Networking & Request Packet Lifecycle Guide
 
 ```
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 17: Enterprise Helm Chart Architecture & Packaging
+# Chapter 17: Enterprise Helm Chart Architecture & Packaging
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 21: Centralized Logging, OpenTelemetry & Distributed Tracing
+# Chapter 21: Centralized Logging, OpenTelemetry & Distributed Tracing
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

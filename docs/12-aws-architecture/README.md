@@ -1,4 +1,4 @@
-﻿# Chapter 12: Production AWS Cloud Architecture (ap-south-1 Mumbai)
+# Chapter 12: Production AWS Cloud Architecture (ap-south-1 Mumbai)
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

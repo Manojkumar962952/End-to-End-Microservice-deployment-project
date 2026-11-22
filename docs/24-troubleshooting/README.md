@@ -1,4 +1,4 @@
-﻿# Chapter 24: Production Troubleshooting, Root Cause Analysis (RCA) & Debugging
+# Chapter 24: Production Troubleshooting, Root Cause Analysis (RCA) & Debugging
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Enterprise API Gateway: Complete Architectural & Operational Guide
+# Enterprise API Gateway: Complete Architectural & Operational Guide
 
 ```
 +─────────────────────────────────────────────────────────────────────────────────────────────────────────+

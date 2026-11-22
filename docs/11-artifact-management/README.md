@@ -1,4 +1,4 @@
-﻿# Chapter 11: Enterprise Artifact Management, OCI Registries & Amazon ECR
+# Chapter 11: Enterprise Artifact Management, OCI Registries & Amazon ECR
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 08: GitHub Actions CI/CD Pipeline Architecture
+# Chapter 08: GitHub Actions CI/CD Pipeline Architecture
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

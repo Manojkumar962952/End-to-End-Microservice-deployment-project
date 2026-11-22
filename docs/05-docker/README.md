@@ -1,4 +1,4 @@
-﻿# Chapter 05: Docker Containerization Architecture & Security
+# Chapter 05: Docker Containerization Architecture & Security
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

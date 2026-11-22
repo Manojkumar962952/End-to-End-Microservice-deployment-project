@@ -1,4 +1,4 @@
-﻿# Chapter 06: Docker Compose Multi-Container Local Orchestration
+# Chapter 06: Docker Compose Multi-Container Local Orchestration
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

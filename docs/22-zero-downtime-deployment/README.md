@@ -1,4 +1,4 @@
-﻿# Chapter 22: Zero-Downtime Deployment Strategies: Rolling, Blue/Green & Canary
+# Chapter 22: Zero-Downtime Deployment Strategies: Rolling, Blue/Green & Canary
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

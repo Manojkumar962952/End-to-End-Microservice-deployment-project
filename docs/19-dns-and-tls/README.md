@@ -1,4 +1,4 @@
-﻿# Chapter 19: Enterprise DNS, TLS 1.3, SSL Termination & Cert-Manager
+# Chapter 19: Enterprise DNS, TLS 1.3, SSL Termination & Cert-Manager
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 23: Enterprise Cloud Cost Optimization & FinOps
+# Chapter 23: Enterprise Cloud Cost Optimization & FinOps
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

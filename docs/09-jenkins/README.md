@@ -1,4 +1,4 @@
-﻿# Chapter 09: Jenkins Enterprise Declarative CI/CD Pipelines
+# Chapter 09: Jenkins Enterprise Declarative CI/CD Pipelines
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+

@@ -1,4 +1,4 @@
-﻿# Chapter 16: Advanced Kubernetes Security, RBAC & Hardening
+# Chapter 16: Advanced Kubernetes Security, RBAC & Hardening
 
 ```
 +───────────────────────────────────────────────────────────────────────────────────────────+
