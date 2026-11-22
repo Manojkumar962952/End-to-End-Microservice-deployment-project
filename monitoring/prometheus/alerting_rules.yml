@@ -1,0 +1,47 @@
+groups:
+  - name: golden_signals_alerts
+    rules:
+      # 1. Traffic & Latency: High p99 Latency
+      - alert: ApiHighP99Latency
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          tier: api-gateway
+        annotations:
+          summary: "p99 latency exceeds 500ms on {{ $labels.route }}"
+          description: "Route {{ $labels.route }} has p99 latency of {{ $value }}s over the last 5 minutes."
+
+      # 2. Errors: 5xx Error Rate Spike (>1%)
+      - alert: HighHttpErrorRate5xx
+        expr: |
+          sum(rate(http_request_duration_seconds_count{status_code=~"5.."}[5m]))
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) * 100 > 1.0
+        for: 2m
+        labels:
+          severity: critical
+          tier: platform
+        annotations:
+          summary: "HTTP 5xx error rate exceeded 1% SLO"
+          description: "Error rate is {{ $value | printf \"%.2f\" }}% across all microservices."
+
+      # 3. Saturation: Service Instance Down
+      - alert: MicroserviceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Microservice {{ $labels.job }} is offline"
+          description: "Prometheus failed to scrape {{ $labels.job }} target for over 1 minute."
+
+      # 4. RabbitMQ Queue Backlog Surging
+      - alert: RabbitMQQueueBacklogHigh
+        expr: rabbitmq_queue_messages_ready > 500
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RabbitMQ queue {{ $labels.queue }} backlog exceeds 500 messages"
+          description: "Consumers may be starved, stalled, or failing to acknowledge events."
