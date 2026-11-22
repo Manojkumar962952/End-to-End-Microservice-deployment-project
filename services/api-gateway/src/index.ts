@@ -32,23 +32,26 @@ const createServiceProxy = (target: string, pathRewrite?: Record<string, string>
     timeout: 10000,
     proxyTimeout: 10000,
     pathRewrite,
-    onProxyReq: (proxyReq, req) => {
+    onProxyReq: (proxyReq: any, req: any) => {
       if (req.correlationId) {
         proxyReq.setHeader('x-correlation-id', req.correlationId);
       }
-      if (req.headers['x-user-id']) {
+      if (req.headers && req.headers['x-user-id']) {
         proxyReq.setHeader('x-user-id', req.headers['x-user-id'] as string);
         proxyReq.setHeader('x-user-email', req.headers['x-user-email'] as string);
         proxyReq.setHeader('x-user-role', req.headers['x-user-role'] as string);
       }
     },
-    onError: (err, _req, res) => {
+    onError: (err: any, _req: any, res: any) => {
       logger.error(`Proxy forwarding error to ${target}`, undefined, err);
-      if (!res.headersSent) {
-        res.status(503).json({
-          success: false,
-          error: { code: 'SERVICE_UNAVAILABLE', message: 'Target microservice is temporarily unavailable.' }
-        });
+      if (res && res.writeHead && !res.headersSent) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: { code: 'SERVICE_UNAVAILABLE', message: 'Target microservice is temporarily unavailable.' }
+          })
+        );
       }
     }
   });
